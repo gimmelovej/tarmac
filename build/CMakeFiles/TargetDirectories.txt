@@ -1,0 +1,3 @@
+/home/vinicius/gimmelove/compiler/tarmac/build/CMakeFiles/tar.dir
+/home/vinicius/gimmelove/compiler/tarmac/build/CMakeFiles/edit_cache.dir
+/home/vinicius/gimmelove/compiler/tarmac/build/CMakeFiles/rebuild_cache.dir
