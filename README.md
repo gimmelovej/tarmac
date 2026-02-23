@@ -1,4 +1,4 @@
-# Tarmac compiler
+# Tarmac compiler - Em andamento
 
 Tarmac compiler é um projeto pessoal de um compilador em c++ para a linguagem Tarmac, também criada por mim (Algo completamente inicial).
 
