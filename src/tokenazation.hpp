@@ -46,12 +46,6 @@ public:
                     tokens.push_back({.type = TokenType::exit});
                     buf.clear();
                     continue;
-                }else if(buf== "("){
-                    consume();
-                    tokens.push_back({.type = TokenType::open_paren});
-                }else if(buf == ")"){
-                    consume();
-                    tokens.push_back({.type = TokenType::close_paren});
                 }
                 else
                 {
@@ -69,6 +63,14 @@ public:
                 tokens.push_back({.type = TokenType::int_lit, .value = buf});
                 buf.clear();
                 continue;
+            }
+            else if (peak().value() == '('){
+                consume();
+                tokens.push_back({.type = TokenType::open_paren});
+            }
+            else if (peak().value() == ')'){
+                consume();
+                tokens.push_back({.type = TokenType::close_paren});
             }
             else if (peak().value() == ';')
             {
