@@ -1,0 +1,54 @@
+name: CI
+
+# Compila o próprio Tarmac e roda um smoke test de ponta a ponta (compilar um .tm e conferir a
+# saída real do binário gerado), em cada push/PR para main e development.
+on:
+  push:
+    branches: [main, development]
+  pull_request:
+    branches: [main, development]
+
+jobs:
+  build-and-smoke:
+    runs-on: ubuntu-latest
+
+    # As duas configurações valem a pena por motivos diferentes: Debug traz ASan/UBSan, que em C
+    # são a rede que substitui boa parte do que o C++ garantia sozinho; Release é a build que
+    # de fato se distribui, e onde um bug escondido por -O0 aparece.
+    strategy:
+      fail-fast: false
+      matrix:
+        build_type: [Debug, Release]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ubuntu-latest já traz gcc, cmake e binutils (as/ld); instala só por garantia.
+      - name: Instalar dependências
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends cmake gcc binutils
+
+      - name: Configurar (CMake)
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+
+      - name: Compilar o Tarmac
+        run: cmake --build build
+
+      # Smoke test: compila um .tm mínimo e confere a saída real do binário — a forma de
+      # verificação recomendada em CONTRIBUTING.md, automatizada.
+      - name: Smoke test (compilar + rodar um .tm)
+        run: |
+          set -euo pipefail
+          printf 'int function main(){ print("ci ok\\n"); return 0; }\n' > "$RUNNER_TEMP/smoke.tm"
+          ./build/tarm "$RUNNER_TEMP/smoke.tm"
+          out="$("$RUNNER_TEMP/smoke")"
+          echo "saída do binário: '$out'"
+          test "$out" = "ci ok"
+
+      # O example.tm da raiz é o passeio pelos recursos da linguagem: se ele parar de compilar ou
+      # de rodar, algum recurso documentado no README regrediu.
+      - name: Compilar e rodar o example.tm
+        run: |
+          set -euo pipefail
+          ./build/tarm example.tm
+          ./example

@@ -1,0 +1,102 @@
+// ================================================================================================
+// example.tm — Passeio pelos recursos da linguagem Tarmac reconhecidos pelo compilador em C.
+// Compile e execute com: ./build/tarm example.tm && ./example
+// ================================================================================================
+
+// Variáveis globais: ficam fora de qualquer função e pedem um literal constante, porque viram dado
+// estático no binário — não há onde executar uma expressão antes de o programa começar.
+string titulo = "== Tarmac em C: passeio pelos recursos ==\n";
+int total = 0;
+
+// Função com parâmetro: o tipo de retorno vem antes da palavra-chave `function`.
+int function dobro(int n)
+{
+    return n * 2;
+}
+
+// Vários parâmetros: a quantidade e o tipo de cada argumento são conferidos por posição.
+int function soma(int a, int b)
+{
+    return a + b;
+}
+
+// Sem parâmetros. O nome `x` se repete em outras funções sem conflito: cada uma tem seu escopo.
+int function resposta()
+{
+    int x = 42;
+    return x;
+}
+
+int function main()
+{
+    print(titulo);
+
+    // Cinco dos seis tipos aparecem aqui; `float` ainda não chega à geração de código.
+    // Literais inteiros são convertidos implicitamente quando o destino pede.
+    int contagem = 3;
+    int64 grande = 10;
+    char inicial = 65;     // convertido para 'A'
+    bool ativo = 1;        // convertido para true
+    string nome = "tarmac";
+
+    print("string: ");
+    print(nome);
+    print("\n");
+
+    print("char e bool: ");
+    print(inicial);
+    print(" ");
+    print(ativo);
+    print("\n");
+
+    // Método de tipo: `len()` devolve o comprimento em bytes, lido do header do objeto.
+    int64 tamanho = nome.len();
+    if tamanho == 6
+    {
+        print("metodo len(): 6 bytes\n");
+    }
+
+    // Chamada aninhada: o valor de cada argumento sobrevive à geração dos seguintes.
+    total = soma(dobro(contagem), resposta());
+    print("funcoes (soma de dobro com resposta): ");
+    print(total);
+    print("\n");
+
+    // Rotina nativa: converte texto decimal e para no primeiro byte que não é dígito.
+    int lido = atoi("58");
+    print("atoi: ");
+    print(lido);
+    print("\n");
+
+    // Condicional: a condição não exige parênteses e o bloco `else` é opcional.
+    if total > 50
+    {
+        print("condicional: total acima de 50\n");
+    }
+    else
+    {
+        print("condicional: total ate 50\n");
+    }
+
+    // Laço: a condição é reavaliada ao fim de cada iteração.
+    int i = 0;
+    while i < contagem
+    {
+        print("laco: iteracao ");
+        print(i);
+        print("\n");
+        i = i + 1;
+    }
+
+    // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio
+    // depois de `a`. O `mmap` mapeia regiões independentes, liberadas por ponteiro e tamanho.
+    int64 a = brk_alloc(64);
+    int64 b = brk_alloc(64);
+    brk_free(a);
+
+    int64 regiao = mmap_alloc(4096);
+    mmap_free(regiao, 4096);
+    print("alocacao: brk e mmap ok\n");
+
+    return 0;
+}
