@@ -110,7 +110,7 @@ aparecem, entram por `parse_primary`, como um agrupamento comum.
 - **`return`** — o valor é opcional: um `;` logo depois da palavra-chave produz `ret.value = NULL`.
 
 A validação de tipo da condição (precisa resolver para `bool`) **não** acontece aqui — é assunto da
-análise semântica, que ainda não existe.
+análise semântica.
 
 ---
 
@@ -126,7 +126,7 @@ só agrupa o que sobra, então a árvore já sai com o agrupamento certo.
 | 3 | `parse_relational` | `>` `>=` `<` `<=` | à esquerda |
 | 4 | `parse_additive` | `+` `-` | à esquerda |
 | 5 | `parse_multiplicative` | `*` `/` | à esquerda |
-| 6 | `parse_postfix` | `.` (método) | à esquerda |
+| 6 | `parse_postfix` | `[ ]` (indexação), `.` (método) | à esquerda |
 | 7 | `parse_primary` | literais, identificador, chamada, `( )` | — |
 
 A associatividade à esquerda vem de reaproveitar `left` como acumulador dentro do laço: cada
@@ -134,9 +134,10 @@ operador encontrado transforma o que já havia no filho esquerdo do nó novo. A 
 isso ao chamar a si mesma para o lado direito, e é por isso que `a = b = c` vira `a = (b = c)`.
 
 **Alvo de atribuição.** O lado esquerdo é reconhecido como expressão qualquer e só depois é
-conferido: se não for um `ExprIdentifier`, sai erro de sintaxe apontando o início dele. Isso mantém
-a produção simples e ainda assim rejeita `1 = 2` com uma mensagem específica, em vez de um
-"token inesperado" genérico.
+conferido: se não for um `ExprIdentifier` nem um `ExprIndex`, sai erro de sintaxe apontando o início
+dele. Isso mantém a produção simples e ainda assim rejeita `1 = 2` com uma mensagem específica, em
+vez de um "token inesperado" genérico. (Um `ExprIndex` passa pelo Parser, mas a geração de código
+ainda o recusa — ver [Arrays](#arrays-novo-e-em-desenvolvimento).)
 
 ---
 
@@ -153,7 +154,8 @@ explícitos. É a convenção que a análise semântica e a geração de código
 assinatura pelo par (tipo do receptor, nome).
 
 `parse_postfix` roda em laço, de modo que `a.b().c()` encadeia: cada método vira o receptor do
-seguinte.
+seguinte. O mesmo laço cuida da indexação, mas os dois caminhos são exclusivos — `v[0].len()` não é
+reconhecido.
 
 A lista de argumentos é montada numa `ExprList` — vetor de heap temporário — e só no fim copiada
 para a arena por `ast_list_commit`. Ver
@@ -179,6 +181,51 @@ A decodificação acontece em quem materializa o valor, e por isso em dois lugar
 - **string** → na geração de código, que repassa a fatia crua ao `as` dentro de um `.string` e
   deixa o próprio assembler resolver os escapes. O comprimento gravado no header do objeto, esse
   sim, é contado já decodificado.
+
+---
+
+## Arrays (novo e em desenvolvimento)
+
+> 🚧 **Recurso novo.** Chegou na `0.2.0-alpha` e ainda é a parte mais instável da linguagem. Já dá
+> para declarar, inicializar e ler; o que **não** funciona está listado no fim desta seção e no
+> [`TODO.md`](../TODO.md).
+
+O tamanho vem **antes** do nome, colado ao tipo — `int[3] v`, e não `int v[3]` como em C:
+
+```tarmac
+int[3] v = { 10, 20, 30 };
+print(v[0]);
+```
+
+Ler a forma de uma vez só é o motivo da escolha. `parse_type` consome a palavra-chave e o `[N]`
+juntos, então quando `parse_declaration` chega ao identificador já sabe tudo sobre o valor: a
+categoria, o tamanho de um elemento e quantos elementos há. O tipo resultante é um `DataType`
+(`types.h`) cujo `type` continua sendo o do **elemento** — `int[3]` guarda `Int`, e o que o
+distingue de um `int` é o `is_array`.
+
+O inicializador `{ ... }` é reconhecido por `parse_array_literal`, chamado só quando o `=` de uma
+declaração é seguido de `{`. Ele **não** é uma expressão de primeira classe: não entra na cadeia de
+precedência, não pode ser passado a uma função nem devolvido de uma. Quem lhe dá tipo é a declaração
+à esquerda, e é a análise semântica que confere a contagem e o tipo de cada elemento.
+
+A indexação entra em `parse_postfix`, no mesmo nível da chamada de método. O resultado de `v[i]` é o
+elemento: mesmo tipo base, com a forma de array desligada.
+
+### O que ainda não funciona
+
+| Limitação | Onde | Efeito |
+|---|---|---|
+| **Elementos se sobrepõem na memória** | Codegen grava cada elemento com `movq` (8 bytes) num passo de `size_of` (4, num `int`) | `{10, 20, 30}` lê de volta `10 0 30` |
+| **Espaço do frame subdimensionado** | `count_slots` conta um slot por declaração, e `declare_local` reserva `SLOT_SIZE` (8 bytes) | um `int[10]` reserva 8 bytes e escreve 40, invadindo o resto do frame |
+| **Atribuir a um elemento** | `v[0] = 9` | o Parser aceita o alvo, a Codegen recusa com "alvo de atribuição não suportado" |
+| **Índice variável** | `v[i]` com `i` variável | só índice literal é aceito; o resto vira erro |
+| **Faixa com `>` no lugar de `>=`** | análise semântica | `v[2]` num `int[2]` passa pela checagem |
+| **Sem verificação em tempo de execução** | — | um índice fora da faixa que escape da checagem estática lê memória vizinha |
+| **Array como parâmetro, retorno ou global** | — | não reconhecido |
+| **`{}` vazio** | `parse_array_literal` confere `RParen` no lugar de `RBrace` | erro confuso: "token inesperado: '}'" |
+
+Enquanto isso não fecha, o uso seguro é o do [`example.tm`](../example.tm): array pequeno, de tipo
+de 8 bytes (`int64`), com índice literal.
 
 ---
 

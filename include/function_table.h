@@ -7,7 +7,7 @@
 /// @brief Assinaturas das funções conhecidas: as nativas da linguagem e as declaradas pelo usuário.
 /// @details Preenchida em duas frentes — `tarm_function_table_register_natives` antes de percorrer
 /// a árvore, e `tarm_function_table_declare` numa passagem prévia sobre as declarações de função.
-/// É o que permite validar aridade e tipos de uma chamada, saber o `DataType` que ela devolve e,
+/// É o que permite validar aridade e tipos de uma chamada, saber o `BaseType` que ela devolve e,
 /// na geração de código, descobrir qual rótulo do runtime chamar.
 /// @note Separada da `SymbolTable` de propósito: variáveis e funções vivem em espaços de nome
 /// distintos, e a tabela de símbolos carrega offset de stack, que não faz sentido para uma função.
@@ -26,7 +26,7 @@
 /// recusado por `tarm_function_table_declare`, com erro para o usuário.
 #define TARM_MAX_PARAMS 16
 
-/// @brief Bit de um `DataType` dentro de uma máscara de tipos aceitos.
+/// @brief Bit de um `BaseType` dentro de uma máscara de tipos aceitos.
 #define TARM_TYPE_BIT(t) (1u << (unsigned)(t))
 
 /// @brief Assinatura de uma função ou método.
@@ -36,8 +36,8 @@
 typedef struct {
     const char *name;      ///< Fatia do buffer de origem (nativas apontam para literais estáticos).
     uint32_t    name_len;
-    DataType    ret_type;
-    DataType    params[TARM_MAX_PARAMS];
+    BaseType    ret_type;
+    BaseType    params[TARM_MAX_PARAMS];
 
     /// Conjunto de tipos aceitos em cada posição, como máscara de `TARM_TYPE_BIT`. Zero significa
     /// "só o tipo exato de `params[i]`"; é o caso de toda função do usuário. Uma nativa como
@@ -49,7 +49,7 @@ typedef struct {
     bool        is_variadic; ///< Aceita qualquer aridade (ex.: `print`); todo argumento é conferido
                              ///< contra `accepted[0]`.
     bool        is_method;   ///< Chamada com `.`; ver `receiver`.
-    DataType    receiver;    ///< Tipo do receptor (só relevante quando `is_method`).
+    BaseType    receiver;    ///< Tipo do receptor (só relevante quando `is_method`).
 
     /// Rótulo do runtime a chamar. Vazio para função do usuário (o rótulo sai do nome, com
     /// *mangling*) e para nativa com despacho por tipo (ver `dispatch_param`).
@@ -59,7 +59,7 @@ typedef struct {
     /// de `print`: um nome na linguagem, cinco rotinas diferentes no runtime.
     int         dispatch_param;
 
-    /// Rótulo por tipo do argumento de despacho, indexado por `DataType`. NULL onde o tipo não é
+    /// Rótulo por tipo do argumento de despacho, indexado por `BaseType`. NULL onde o tipo não é
     /// suportado — o que não deve acontecer, porque `accepted` já barra esses casos na semântica.
     const char *symbol_by_type[Void + 1];
 } FunctionSignature;
@@ -89,7 +89,7 @@ bool tarm_function_table_register_natives(FunctionTable *ft);
 /// @return `false` se o nome já existir, se `param_count` passar de `TARM_MAX_PARAMS`, ou se a
 /// realocação falhar. Sem erro registrado aqui — é quem chama que tem a posição do nó.
 bool tarm_function_table_declare(FunctionTable *ft, const char *name, uint32_t name_len,
-                                 DataType ret_type, const DataType *params, size_t param_count,
+                                 BaseType ret_type, const BaseType *params, size_t param_count,
                                  const char **out_reason);
 
 /// @brief Busca uma função comum (não método) pelo nome.
@@ -105,7 +105,7 @@ const FunctionSignature *tarm_function_table_find(const FunctionTable *ft,
 /// @return Ponteiro para a assinatura, ou `NULL` se não houver método com esse nome para o tipo.
 const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft,
                                                          const char *name, uint32_t name_len,
-                                                         DataType receiver);
+                                                         BaseType receiver);
 
 /// @brief Indica se já existe uma função com o nome dado.
 bool tarm_function_table_exists(const FunctionTable *ft,
@@ -126,6 +126,6 @@ uint32_t tarm_function_table_accepted_mask(const FunctionSignature *sig, size_t 
 /// @param dispatch_type Tipo do argumento em `sig->dispatch_param`; ignorado quando não há despacho.
 /// @return O rótulo, ou `NULL` se a assinatura for de função do usuário (o rótulo sai do nome) ou
 /// se o tipo não tiver implementação no runtime.
-const char *tarm_function_table_symbol(const FunctionSignature *sig, DataType dispatch_type);
+const char *tarm_function_table_symbol(const FunctionSignature *sig, BaseType dispatch_type);
 
 #endif

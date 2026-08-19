@@ -9,6 +9,48 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.2.0-alpha] - 2026-08-17
+
+Suporte inicial a **arrays** — o primeiro recurso da linguagem que nasce neste port, e não veio
+herdado do compilador em C++.
+
+> 🚧 O recurso é **novo e está em desenvolvimento**. Já dá para declarar, inicializar e ler, mas
+> elementos de menos de 8 bytes se sobrepõem, o índice precisa ser literal e atribuir a um elemento
+> não é gerado. As limitações estão listadas em
+> [Arrays](README.md#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md), que passa a ser a
+> lista viva do que vem a seguir.
+
+### Adicionado
+- **Arrays**: `int64[3] v = { 10, 20, 30 };` e `v[0]`. O tamanho vem **antes** do nome, colado ao
+  tipo, para que a forma seja lida junto com a categoria numa passagem só (`parse_type`). Cobre a
+  declaração com tamanho fixo, o inicializador `{ ... }` — que só vale numa declaração, não é
+  expressão de primeira classe — e a leitura por índice literal.
+- Nós `ExprIndex` e `ExprArrayLit` na AST, tokens `LBracket`/`RBracket` no Lexer, e a checagem
+  semântica da contagem de elementos, do tipo de cada um e da faixa do índice.
+- [`TODO.md`](TODO.md): as próximas correções de patch e novidades, em ordem de prioridade, com o
+  arquivo de cada uma.
+
+### Alterado
+- **`DataType` virou duas coisas**: `BaseType` guarda a categoria (`Int`, `String`, ...) e
+  `DataType` a envolve com a forma (`is_array`, `array_len`, `size_of` de um elemento). Isso evita
+  duplicar cada tipo da linguagem numa versão "array de", e mantém indexado por uma dimensão só
+  tudo que só se importa com a categoria — as máscaras da `FunctionTable`, o despacho de `print`,
+  as mensagens de erro. `tarm_datatype_of` monta o `DataType` de um escalar com o `size_of` já
+  resolvido.
+- **`ExprVarDecl` e `ExprAssign` guardam um nó**, não um par nome/comprimento: `var_decl.obj` e
+  `assign.target` são `Expr *`. É o que permite o alvo de uma atribuição ser um `ExprIndex`, e dá
+  posição própria a cada um nas mensagens de erro.
+- Comparadores renomeados no `enum` de tokens para o que de fato são: `GBrackets`/`LBrackets` →
+  `Greater`/`Less`, e os pares com `=` na mesma linha. Os colchetes agora são `LBracket`/`RBracket`.
+
+### Corrigido
+- `ExprArrayLit` não era tratado no `switch` da geração de código (`-Wswitch`): um literal de array
+  fora de uma declaração passa a virar erro explícito, em vez de cair no fim da função.
+- Leitura de `var_decl.obj` **antes** do teste de `kind` na emissão dos globais, o que lia a
+  variante errada da união em todo nó que não fosse uma declaração de variável.
+- `go_back` removida de `parser.c`: função morta, sem chamador, que a build acusava
+  (`-Wunused-function`).
+
 ## [0.1.0-alpha] - 2026-08-17
 
 Primeira versão do Tarmac reescrito em C, a partir do compilador que nasceu em C++ em

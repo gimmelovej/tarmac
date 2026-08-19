@@ -59,7 +59,7 @@ void tarm_semantic_init(SemanticAnalyzer *an, Diagnostics *diag, Arena *arena,
 /// e a validação segue, para que o usuário veja todos os problemas de uma vez (ver errors.h).
 bool tarm_semantic_analyse(SemanticAnalyzer *an, Expr **program, size_t count);
 
-/// @brief Nome legível de um `DataType`, para mensagens de erro.
-const char *tarm_semantic_type_name(DataType type);
+/// @brief Nome legível de um `BaseType`, para mensagens de erro.
+const char *tarm_semantic_type_name(BaseType type);
 
 #endif

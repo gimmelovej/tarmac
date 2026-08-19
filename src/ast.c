@@ -58,7 +58,7 @@ Expr *ast_expr_new(Arena *a, ExprKind kind, uint32_t line, uint32_t col) {
     Expr *e = arena_alloc(a, sizeof *e);
     if (!e) return NULL;
     e->kind = kind;
-    e->type = Void;
+    e->type = (DataType){ .type = Void, .size_of = 0, .is_array = false, .array_len = 0 };
     e->line = line;
     e->col  = col;
     return e;

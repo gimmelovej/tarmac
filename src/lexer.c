@@ -196,18 +196,20 @@ static Token scan_symbol(Lexer *lx)
     case '-': return make_token(lx, Minus);
     case '*': return make_token(lx, Star);
     case '/': return make_token(lx, Slash);
+    case '[': return make_token(lx, LBracket);
+    case ']': return make_token(lx, RBracket);
 
     case '=':
         if (peek(lx) == '=') { consume(lx); return make_token(lx, EqualEqual); }
         return make_token(lx, Equal);
 
     case '>':
-        if (peek(lx) == '=') { consume(lx); return make_token(lx, GBracketsEqual); }
-        return make_token(lx, GBrackets);
+        if (peek(lx) == '=') { consume(lx); return make_token(lx, GreaterEqual); }
+        return make_token(lx, Greater);
 
     case '<':
-        if (peek(lx) == '=') { consume(lx); return make_token(lx, LBracketsEqual); }
-        return make_token(lx, LBrackets);
+        if (peek(lx) == '=') { consume(lx); return make_token(lx, LessEqual); }
+        return make_token(lx, Less);
 
     default:
         // O erro é acumulado e a varredura continua: o token `Invalid` mantém a lista alinhada
@@ -456,10 +458,12 @@ const char *tarm_token_kind_name(TokenKind kind)
         case Semicolon:       return "Semicolon";
         case EndOfFile:       return "EndOfFile";
         case Invalid:         return "Invalid";
-        case GBrackets:       return "GBrackets";
-        case LBrackets:       return "LBrackets";
-        case GBracketsEqual:  return "GBracketsEqual";
-        case LBracketsEqual:  return "LBracketsEqual";
+        case LBracket:        return "LBracket";
+        case RBracket:        return "RBracket";
+        case Greater:         return "Greater";
+        case Less:            return "Less";
+        case GreaterEqual:    return "GreaterEqual";
+        case LessEqual:       return "LessEqual";
         case Dot:             return "Dot";
     }
     return "?";

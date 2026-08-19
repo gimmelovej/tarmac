@@ -4,7 +4,9 @@
 // Created in: 2026
 // ================================================================================================
 #include "parser.h"
+#include "symbol_table.h"
 #include <string.h>
+#include <stdio.h>
 
 // Declarações adiantadas: a cadeia de precedência é mutuamente recursiva (`primary` volta a
 // `expression` pelos parênteses), então não há ordem de definição que dispense os protótipos.
@@ -14,6 +16,7 @@ static Expr *parse_global_declaration(Parser *ps);
 static bool  parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count);
 static Expr *parse_declaration(Parser *ps);
 static Expr *parse_statement(Parser *ps);
+static Expr *parse_array_literal(Parser *ps);
 static Expr *parse_expression(Parser *ps);
 static Expr *parse_assignment(Parser *ps);
 static Expr *parse_equality(Parser *ps);
@@ -22,6 +25,8 @@ static Expr *parse_additive(Parser *ps);
 static Expr *parse_multiplicative(Parser *ps);
 static Expr *parse_postfix(Parser *ps);
 static Expr *parse_primary(Parser *ps);
+static bool parse_type(Parser *ps, DataType *out);
+
 
 void tarm_parser_init(Parser *ps, const TokenList *toks, Diagnostics *diag, Arena *arena) {
     ps->tokens = *toks;
@@ -80,12 +85,14 @@ static bool expect(Parser *ps, TokenKind kind, const char *what) {
 // Auxiliares
 // ------------------------------------------------------------------------------------------------
 
+
 static bool match_type_kw(Parser *ps) {
     return match(ps, KwInt)  || match(ps, KwInt64) || match(ps, KwFloat)
         || match(ps, KwChar) || match(ps, KwString) || match(ps, KwBool);
 }
 
-static DataType datatype_from_token(TokenKind k) {
+
+static BaseType datatype_from_token(TokenKind k) {
     switch (k) {
         case KwChar:   return Char;
         case KwInt:    return Int;
@@ -97,6 +104,22 @@ static DataType datatype_from_token(TokenKind k) {
     }
 }
 
+// Tamanho de um elemento, em bytes. Duplica `tarm_symbol_table_data_size` de propósito: o Parser
+// precisa do valor para montar o `DataType` antes de a tabela de símbolos existir, e arrastar a
+// tabela até aqui só por isso acoplaria as duas etapas.
+static size_t size_of_base(BaseType b) {
+    switch (b) {
+        case Char:   return 1;
+        case Bool:   return 1;
+        case Int:    return 4;
+        case Int64:  return 8;
+        case Float:  return 8;
+        case String: return 8;   // ponteiro para o header
+        case Void:   return 0;
+    }
+    return 0;
+}
+
 // Sem verificação de estouro: `99999999999999999999` dá a volta em silêncio. Pendência para a
 // análise semântica, que é onde o intervalo do tipo declarado é conhecido.
 static int64_t parse_int_slice(const char *s, uint32_t len) {
@@ -104,6 +127,30 @@ static int64_t parse_int_slice(const char *s, uint32_t len) {
     for (uint32_t i = 0; i < len; i++)
         v = v * 10 + (s[i] - '0');
     return v;
+}
+
+// Tipo de uma declaração: a palavra-chave e, opcionalmente, o `[N]` que a torna um array.
+//
+// O tamanho vem **antes** do nome (`int[3] v`), e não depois como em C. É o que deixa o tipo ser
+// lido de uma vez só: quando `parse_declaration` chega ao identificador, já sabe tudo sobre a
+// forma do valor.
+//
+// Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+static bool parse_type(Parser *ps, DataType *out){
+    Token    kw = peek(ps);
+
+    if(!match_type_kw(ps)) return false;
+
+    *out = (DataType){ .type = datatype_from_token(kw.kind), .array_len = 0 };
+    out->size_of = size_of_base(out->type);
+    if(match(ps, LBracket)){
+        if (!expect(ps, LiteralInteger, "o tamanho do array")) return false;
+        out->is_array = true;
+        out->array_len = (size_t)parse_int_slice(previous(ps).start, previous(ps).len);
+        if (!expect(ps, RBracket, "']' ao fechar o tamanho do array")) return false;
+    }
+
+    return true;
 }
 
 // Resolve o conteúdo de um literal de caractere, que o Lexer entrega cru. As sequências aceitas são
@@ -161,7 +208,7 @@ static Expr *parse_top_level(Parser *ps) {
 // O tipo de retorno já foi consumido por `parse_top_level` e é lido de volta via `previous`.
 static Expr *parse_function_declaration(Parser *ps) {
     Token    type_tok = previous(ps);
-    DataType ret_type = datatype_from_token(type_tok.kind);
+    DataType ret_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
 
     advance(ps);   // consome KwFunction
 
@@ -199,10 +246,10 @@ static Expr *parse_function_declaration(Parser *ps) {
 // que a análise semântica e a codegen vão consultar, não a produção que criou o nó.
 static Expr *parse_global_declaration(Parser *ps) {
     Token    type_tok = previous(ps);
-    DataType var_type = datatype_from_token(type_tok.kind);
+    DataType var_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
 
-    if (!expect(ps, Identifier, "o nome da variável na declaração global")) return NULL;
-    Token name = previous(ps);
+    Expr *identifier_expr = parse_postfix(ps);
+    if (!identifier_expr) return NULL;
 
     Expr *init = NULL;
     if (match(ps, Equal)) {
@@ -213,8 +260,7 @@ static Expr *parse_global_declaration(Parser *ps) {
     Expr *e = ast_expr_new(ps->arena, ExprVarDecl, type_tok.line, type_tok.col);
     if (!e) return NULL;
 
-    e->as.var_decl.name        = name.start;
-    e->as.var_decl.name_len    = name.len;
+    e->as.var_decl.obj         = identifier_expr;
     e->as.var_decl.type        = var_type;
     e->as.var_decl.initializer = init;
     e->as.var_decl.frame       = Global;
@@ -252,26 +298,24 @@ static bool parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count) {
 
 // Declaração local, ou uma instrução comum se não começar por tipo.
 static Expr *parse_declaration(Parser *ps) {
-    if (!match_type_kw(ps))
-        return parse_statement(ps);
 
-    Token    type_tok = previous(ps);
-    DataType var_type = datatype_from_token(type_tok.kind);
+    DataType var_type;
+    Token type_tok = peek(ps);
+    if(!parse_type(ps, &var_type)) return parse_statement(ps);
 
-    if (!expect(ps, Identifier, "o nome da variável na declaração")) return NULL;
-    Token name = previous(ps);
+    Expr *identifier_expr = parse_primary(ps);
+    if (!identifier_expr) return NULL;
 
     Expr *init = NULL;
     if (match(ps, Equal)) {
-        init = parse_statement(ps);
+        init = check(ps, LBrace) ? parse_array_literal(ps) : parse_expression(ps);        
         if (!init) return NULL;
     }
 
     Expr *e = ast_expr_new(ps->arena, ExprVarDecl, type_tok.line, type_tok.col);
     if (!e) return NULL;
 
-    e->as.var_decl.name        = name.start;
-    e->as.var_decl.name_len    = name.len;
+    e->as.var_decl.obj         = identifier_expr;
     e->as.var_decl.type        = var_type;
     e->as.var_decl.initializer = init;
     e->as.var_decl.frame       = Local;
@@ -338,6 +382,35 @@ static Expr *parse_statement(Parser *ps) {
     return parse_expression(ps);
 }
 
+// Inicializador de array: `{ 1, 2, 3 }`. Só é chamado por `parse_declaration`, quando o `=` é
+// seguido de `{` — um literal de array não é expressão de primeira classe, então não entra na
+// cadeia de precedência.
+//
+// NOTA: o teste de lista vazia confere `RParen` onde deveria conferir `RBrace`, então `{}` cai no
+// laço e produz um "token inesperado: '}'" em vez de um erro claro.
+static Expr *parse_array_literal(Parser *ps){
+    if (!match(ps, LBrace)) return NULL;
+    Token open = previous(ps);
+    ExprList items = {0};
+    if(!check(ps, RParen)){
+        do {
+            Expr *a = parse_expression(ps);
+            if (!a || !ast_list_push(&items, a)){
+                ast_list_free(&items); return NULL;;
+            }
+        } while (match(ps, Comma));
+    }
+    
+    if (!expect(ps, RBrace, "'}' ao fechar o inicializador")) {
+        ast_list_free(&items); return NULL;
+    }
+
+    Expr *e = ast_expr_new(ps->arena, ExprArrayLit, open.line, open.col);
+    if (!e) { ast_list_free(&items); return NULL; }
+    e->as.array_lit.elements = ast_list_commit(ps->arena, &items, &e->as.array_lit.count);
+    return e;
+}
+
 // ------------------------------------------------------------------------------------------------
 // Expressões, da menor para a maior precedência. A precedência não está guardada em lugar nenhum:
 // ela *é* a ordem em que as produções se chamam, e cada nível só agrupa o que o de cima deixou.
@@ -356,19 +429,17 @@ static Expr *parse_assignment(Parser *ps) {
     if (match(ps, Equal)) {
         Expr *value = parse_assignment(ps);
         if (!value) return NULL;
-
-        if (expr->kind != ExprIdentifier) {
+        if (expr->kind != ExprIdentifier && expr->kind != ExprIndex) {
             tarm_error_at(ps->diag, expr->line, expr->col,
-                          "alvo de atribuição inválido "
-                          "(esperava um identificador à esquerda de '=')");
+                        "alvo de atribuição inválido "
+                        "(esperava um identificador à esquerda de '=')");
             return NULL;
         }
 
         Expr *a = ast_expr_new(ps->arena, ExprAssign, expr->line, expr->col);
         if (!a) return NULL;
-        a->as.assign.name     = expr->as.identifier.name;
-        a->as.assign.name_len = expr->as.identifier.len;
-        a->as.assign.value    = value;
+        a->as.assign.target = expr;
+        a->as.assign.value  = value;
         return a;
     }
     return expr;
@@ -407,10 +478,10 @@ static Expr *parse_relational(Parser *ps) {
         BinaryOp op;
         Token    t = peek(ps);
 
-        if      (check(ps, GBrackets))      op = OpGt;
-        else if (check(ps, GBracketsEqual)) op = OpGtEq;
-        else if (check(ps, LBrackets))      op = OpLt;
-        else if (check(ps, LBracketsEqual)) op = OpLtEq;
+        if      (check(ps, Greater))      op = OpGt;
+        else if (check(ps, GreaterEqual)) op = OpGtEq;
+        else if (check(ps, Less))      op = OpLt;
+        else if (check(ps, LessEqual)) op = OpLtEq;
         else break;
 
         advance(ps);
@@ -464,36 +535,58 @@ static Expr *parse_multiplicative(Parser *ps) {
     return left;
 }
 
-// Chamada de método: `x.len()`. O receptor entra como `args[0]`, seguido dos argumentos
-// explícitos — é essa convenção que a análise semântica e a codegen esperam.
+// Sufixos que se aplicam a um valor já reconhecido: indexação (`v[i]`) e chamada de método
+// (`x.len()`). No método, o receptor entra como `args[0]`, seguido dos argumentos explícitos — é
+// essa convenção que a análise semântica e a codegen esperam.
+//
+// Os dois são laços, então encadeiam (`a[i][j]`, `a.b().c()`), mas não se misturam: o `if/else`
+// escolhe um dos dois caminhos, e `v[0].len()` não é reconhecido.
 static Expr *parse_postfix(Parser *ps) {
     Expr *receiver = parse_primary(ps);
     if (!receiver) return NULL;
+    if(check(ps, LBracket)){
+        while (match(ps, LBracket))
+        {
+            Token open = previous(ps);
 
-    while (match(ps, Dot)) {
-        if (!expect(ps, Identifier, "o nome do método após '.'")) return NULL;
-        Token name = previous(ps);
+            Expr *index  = parse_expression(ps);
+            if(!index) return NULL;
 
-        if (!expect(ps, LParen, "'(' ao abrir um método")) return NULL;
+            if (!expect(ps, RBracket, "']' ao fechar uma indexação")) return NULL;
+            
+            Expr *e = ast_expr_new(ps->arena, ExprIndex, open.line, open.col);
+            if (!e) return NULL;
 
-        ExprList args = {0};
-        if (!ast_list_push(&args, receiver)) { ast_list_free(&args); return NULL; }
-        if (!parse_arg_list(ps, &args))      { ast_list_free(&args); return NULL; }
+            e->as.index.base = receiver;
+            e->as.index.index = index;
+            receiver = e;
+        }   
+    } else if(check(ps, Dot)){
+        while (match(ps, Dot)) {
+            if (!expect(ps, Identifier, "o nome do método após '.'")) return NULL;
+            Token name = previous(ps);
 
-        Expr *e = ast_expr_new(ps->arena, ExprMethod, name.line, name.col);
-        if (!e) { ast_list_free(&args); return NULL; }
+            if (!expect(ps, LParen, "'(' ao abrir um método")) return NULL;
 
-        e->as.call.name     = name.start;
-        e->as.call.name_len = name.len;
-        e->as.call.args     = ast_list_commit(ps->arena, &args, &e->as.call.arg_count);
-        receiver = e;
+            ExprList args = {0};
+            if (!ast_list_push(&args, receiver)) { ast_list_free(&args); return NULL; }
+            if (!parse_arg_list(ps, &args))      { ast_list_free(&args); return NULL; }
+
+            Expr *e = ast_expr_new(ps->arena, ExprMethod, name.line, name.col);
+            if (!e) { ast_list_free(&args); return NULL; }
+
+            e->as.call.name     = name.start;
+            e->as.call.name_len = name.len;
+            e->as.call.args     = ast_list_commit(ps->arena, &args, &e->as.call.arg_count);
+            receiver = e;
+        }
     }
     return receiver;
 }
 
 // Folhas da árvore: literais, identificador, chamada e o agrupamento por parênteses.
 //
-// NOTA: os ramos de `LiteralFloat`, `LiteralString`, `LiteralChar`, `KwTrue` e `KwFalse` são
+// NOTA: os ramos de `Literatoken inesplFloat`, `LiteralString`, `LiteralChar`, `KwTrue` e `KwFalse` são
 // inalcançáveis por enquanto — o Lexer ainda não emite esses tokens, e um número volta como
 // `Identifier`. Ver docs/parser.md#pendências-conhecidas.
 static Expr *parse_primary(Parser *ps) {

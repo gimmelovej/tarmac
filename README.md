@@ -19,9 +19,13 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > 🎉 **O pipeline fecha.** Lexer, Parser, análise semântica, geração de código e a montagem/link com
 > `as` e `ld` estão no lugar, com a runtime em assembly: `./build/tarm example.tm && ./example`
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
-> `if`/`else`, `while`, strings, chamadas nativas e alocação. Falta o que está marcado como
-> pendente em [Estado do desenvolvimento](#estado-do-desenvolvimento), com destaque para `float`,
-> que é reconhecido pela linguagem mas ainda não chega ao assembly.
+> `if`/`else`, `while`, strings, chamadas nativas e alocação.
+>
+> 🚧 **Novidade da `0.2.0-alpha`: arrays.** `int64[3] v = { 10, 20, 30 };` e `v[0]` já funcionam de
+> ponta a ponta. É o recurso mais novo e **o mais instável** da linguagem: elementos de menos de 8
+> bytes ainda se sobrepõem, o índice precisa ser literal e atribuir a um elemento não é gerado. As
+> limitações estão listadas sem rodeio em [Arrays](#arrays-novo-e-em-desenvolvimento) e no
+> [`TODO.md`](TODO.md) — use com essa ressalva em mente.
 
 ---
 
@@ -34,12 +38,13 @@ tarmac/
 ├── runtime/        # Rotinas de suporte em assembly (.s), montadas e linkadas ao programa
 ├── docs/           # Documentação de referência conceitual (arquitetura, parser, runtime)
 ├── CMakeLists.txt  # Build do executável `tarm`
+├── TODO.md         # Próximas correções e novidades, em ordem de prioridade
 └── README.md       # Este arquivo
 ```
 
 | Módulo | Responsabilidade |
 |---|---|
-| `include/types.h` | Vocabulário compartilhado: `TokenKind`, `Token` (fatia do buffer de origem), `TokenList`, `DataType` e `FrameType`. |
+| `include/types.h` | Vocabulário compartilhado: `TokenKind`, `Token` (fatia do buffer de origem), `TokenList`, `BaseType`/`DataType` e `FrameType`. |
 | `include/errors.h`, `src/erros.c` | `Diagnostics`: acumula erros com posição, com limite de impressão. |
 | `include/file.h`, `src/file.c` | Lê o arquivo-fonte inteiro para um buffer terminado em `'\0'`. |
 | `include/lexer.h`, `src/lexer.c` | Código-fonte (texto) → `TokenList`. |
@@ -89,6 +94,33 @@ de literais inteiros, `if`/`else`, `while`, funções com parâmetros e um punha
 Os detalhes de cada rotina estão em [`docs/runtime.md`](docs/runtime.md), e a gramática produção a
 produção em [`docs/parser.md`](docs/parser.md). O [`example.tm`](example.tm) na raiz é um passeio
 por tudo que o compilador já leva do `.tm` ao binário.
+
+### Arrays (novo e em desenvolvimento)
+
+Chegaram na `0.2.0-alpha`. O tamanho vem **antes** do nome, colado ao tipo — assim o tipo é lido de
+uma vez só, com a forma junto:
+
+```tarmac
+int64[3] medidas = { 10, 20, 30 };
+print(medidas[1]);                  // imprime: 20
+```
+
+O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler um elemento por
+índice literal, e a checagem em tempo de compilação do tipo de cada elemento e da faixa do índice.
+
+O que **ainda não**, e vale saber antes de usar:
+
+| Limitação | Efeito prático |
+|---|---|
+| Elementos de menos de 8 bytes se sobrepõem | `int[3] v = {10,20,30}` lê de volta `10 0 30`; use `int64` por enquanto |
+| O frame reserva um slot por array, não `array_len` | um array grande invade o resto da stack frame |
+| Índice precisa ser literal | `v[i]` com `i` variável é recusado |
+| Atribuir a um elemento não é gerado | `v[0] = 9` vira erro de "alvo de atribuição não suportado" |
+| A faixa usa `>` no lugar de `>=` | `v[2]` num `int[2]` passa pela checagem |
+| Sem array como parâmetro, retorno ou global | não reconhecido |
+
+Cada uma delas está no [`TODO.md`](TODO.md), com o arquivo e a correção prevista; o detalhamento
+técnico está em [`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento).
 
 > Dois recursos do [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) não vieram para este
 > port: o tipo **`buffer`** (e a nativa `read_buf` que o produzia) e o **ponto flutuante** na
@@ -157,7 +189,15 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
 | Parser | Menos unário, `!=`, `&&`/`||` | ⚪ Não iniciado | `-5` é erro de sintaxe; não há token para os operadores lógicos |
+| Array | Declaração com tamanho fixo (`int64[3] v`), inicializador `{ ... }` e leitura por índice literal | 🟡 **Novo, em desenvolvimento** | funciona de ponta a ponta para elementos de 8 bytes; ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
+| Array | Elementos de menos de 8 bytes | 🔴 Bug conhecido | o inicializador grava com `movq` num passo de `size_of`, então `int[3] {10,20,30}` lê `10 0 30` |
+| Array | Espaço reservado no frame | 🔴 Bug conhecido | `count_slots` conta um slot por declaração: um `int[10]` reserva 8 bytes e escreve 40 |
+| Array | Atribuição a elemento (`v[0] = 9`) | 🟡 Recusada | o Parser aceita o alvo, a Codegen ainda não emite o endereço do slot |
+| Array | Índice variável | 🟡 Recusado | só índice literal; falta a aritmética de endereço em tempo de execução |
+| Array | Checagem de faixa | 🟡 Parcial | compara com `>` no lugar de `>=`, e só vale para índice literal |
+| Array | Como parâmetro, retorno ou variável global | ⚪ Não iniciado | — |
 | AST | Nós da árvore: união etiquetada por `ExprKind`, com o tipo resolvido em `type` e a posição de origem em cada nó | 🟢 Implementado | nomes e textos são fatias do buffer, como nos tokens; ver [`docs/architecture.md`](docs/architecture.md#a-ast-como-união-etiquetada) |
+| Tipos | `BaseType` (categoria) separado de `DataType` (categoria + forma de array) | 🟢 Implementado | evita duplicar cada tipo numa versão "array de"; quem só precisa da categoria lê `type` |
 | AST | `ExprList` → arena (`ast_list_push`/`ast_list_commit`) | 🟢 Implementado | vetor temporário no heap, copiado para a arena quando o tamanho final é conhecido |
 | AST | Arena (`arena_init`/`arena_alloc`/`arena_free`) | 🟢 Implementado | blocos de 64 KiB, *bump allocator*, liberação única; ver [`docs/architecture.md`](docs/architecture.md#arena-no-lugar-de-unique_ptr) |
 | AST | Sinalização de falha em `ast_list_commit` | 🟡 A revisar | devolve NULL tanto para lista vazia quanto para falha da arena, com `*out_count` já preenchido — o chamador não distingue os dois casos |
@@ -237,6 +277,11 @@ companhia ligados em toda build, e ASan/UBSan no Debug. Está tudo em
 
 Padrão de documentação (Doxygen em C), como compilar e verificar localmente e estilo de commit
 estão em [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+## O que vem a seguir
+
+As próximas correções de patch e as novidades planejadas, em ordem de prioridade e com o arquivo de
+cada uma, ficam em [`TODO.md`](TODO.md) — começando pelo que falta para fechar o suporte a array.
 
 ## Histórico de mudanças
 

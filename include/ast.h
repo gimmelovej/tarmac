@@ -29,11 +29,14 @@
 /// não impede a build.
 /// @note `ExprCast` é o único que o Parser nunca produz: quem o insere é a análise semântica, ao
 /// encontrar uma conversão implícita permitida.
+/// @note `ExprIndex` e `ExprArrayLit` são o suporte a array, **novo e em desenvolvimento** — ver
+/// docs/parser.md#arrays-novo-e-em-desenvolvimento.
 typedef enum {
     ExprInteger, ExprFloat, ExprBool, ExprString, ExprChar,
     ExprIdentifier, ExprBinary, ExprAssign,
     ExprVarDecl, ExprFuncDecl, ExprCall, ExprMethod,
-    ExprConditional, ExprWhile, ExprReturn, ExprCast
+    ExprConditional, ExprWhile, ExprReturn, ExprCast,
+    ExprIndex, ExprArrayLit
 } ExprKind;
 
 /// @brief Conversão implícita representada por um nó `ExprCast`.
@@ -78,17 +81,34 @@ struct Expr {
         struct { char value; }                       char_lit;
         struct { const char *name; uint32_t len; }   identifier;
 
+        /// Inicializador de array (`{ 1, 2, 3 }`). Só aparece à direita de uma declaração — não é
+        /// uma expressão de primeira classe, e a análise semântica confere a contagem e o tipo de
+        /// cada elemento contra o tipo declarado.
+        struct { Expr **elements; size_t count; }    array_lit;
+
         struct { BinaryOp op; Expr *left, *right; }  binary;
 
+        /// `obj` é um nó `ExprIdentifier` — e não um par nome/comprimento — para que a declaração
+        /// carregue posição própria e possa, no futuro, receber alvos mais complexos sem mudar a
+        /// forma do nó.
         struct {
-            const char *name; uint32_t name_len;
+            Expr       *obj;
             DataType    type;
-            Expr       *initializer;   // NULL se sem valor inicial
+            Expr       *initializer;   ///< NULL se sem valor inicial.
             FrameType   frame;         ///< `Global` fora de função, `Local` dentro dela.
         } var_decl;
 
+        /// Indexação `base[index]`. Encadeia à esquerda (`a[i][j]` é `(a[i])[j]`), embora array de
+        /// array ainda não exista.
         struct {
-            const char *name; uint32_t name_len;
+            Expr *base;
+            Expr *index;
+        } index;
+
+        /// `target` é um `ExprIdentifier` ou um `ExprIndex` — a mesma razão de `var_decl.obj`: o
+        /// alvo é um nó, não um nome, e é o Parser que restringe quais formas são atribuíveis.
+        struct {
+            Expr       *target;
             Expr       *value;
         } assign;
 
@@ -128,7 +148,7 @@ struct Expr {
             Expr *operand;
         } cast;
 
-        struct { Expr *value; } ret;   // NULL para `return;`
+        struct { Expr *value; } ret;   ///< `value` é NULL num `return;` sem expressão.
     } as;
 };
 

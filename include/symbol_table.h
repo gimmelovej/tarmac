@@ -58,8 +58,19 @@ void tarm_symbol_table_init(SymbolTable *st);
 /// @brief Libera o vetor de símbolos. Seguro chamar mais de uma vez.
 void tarm_symbol_table_free(SymbolTable *st);
 
-/// @brief Tamanho em bytes de um `DataType` (offsets na stack e alinhamento).
-size_t tarm_symbol_table_data_size(DataType type);
+/// @brief Tamanho em bytes de um elemento de `BaseType` (offsets na stack e alinhamento).
+/// @note Tamanho de **um** elemento — para um array, quem chama multiplica por `array_len`.
+size_t tarm_symbol_table_data_size(BaseType type);
+
+/// @brief Constrói um `DataType` escalar (não-array) para `base`, com `size_of` já resolvido via
+/// `tarm_symbol_table_data_size`.
+/// @note Fica aqui, e não em `types.h`, porque depende de `tarm_symbol_table_data_size` — `types.h`
+/// é só vocabulário, sem lógica.
+static inline DataType tarm_datatype_of(BaseType base) {
+    DataType t = { .type = base, .size_of = tarm_symbol_table_data_size(base),
+                   .is_array = false, .array_len = 0 };
+    return t;
+}
 
 /// @brief Busca uma variável pelo nome.
 /// @return Ponteiro para o `Symbol`, ou `NULL` se não existir.

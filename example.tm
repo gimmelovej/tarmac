@@ -1,6 +1,9 @@
 // ================================================================================================
 // example.tm — Passeio pelos recursos da linguagem Tarmac reconhecidos pelo compilador em C.
 // Compile e execute com: ./build/tarm example.tm && ./example
+//
+// Destaque desta versão: ARRAYS (novo, em desenvolvimento) — ver o bloco no fim de main() e as
+// limitações conhecidas em docs/parser.md#arrays-novo-e-em-desenvolvimento.
 // ================================================================================================
 
 // Variáveis globais: ficam fora de qualquer função e pedem um literal constante, porque viram dado
@@ -87,6 +90,27 @@ int function main()
         print("\n");
         i = i + 1;
     }
+
+    // --- ARRAYS: recurso novo, ainda em desenvolvimento -----------------------------------------
+    //
+    // O tamanho vem antes do nome (`int64[3] v`), colado ao tipo — assim o tipo é lido de uma vez
+    // só, com a forma junto. O inicializador `{ ... }` só vale numa declaração.
+    //
+    // Este exemplo usa `int64` de propósito: com elementos de 8 bytes, o passo que a geração de
+    // código emite bate com o tamanho do elemento. Num `int[3]` (4 bytes) os elementos ainda se
+    // sobrepõem — é a primeira pendência do TODO.md.
+    print("array (novo): ");
+    int64[3] medidas = { 10, 20, 30 };
+    print(medidas[0]);
+    print(" ");
+    print(medidas[1]);
+    print(" ");
+    print(medidas[2]);
+    print("\n");
+
+    // O índice precisa ser literal por enquanto, e a faixa é conferida em tempo de compilação:
+    // `medidas[9]` seria recusado pela análise semântica. Atribuir a um elemento
+    // (`medidas[0] = 5;`) ainda não é gerado.
 
     // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio
     // depois de `a`. O `mmap` mapeia regiões independentes, liberadas por ponteiro e tamanho.

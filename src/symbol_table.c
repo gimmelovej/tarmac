@@ -74,7 +74,7 @@ void tarm_symbol_table_free(SymbolTable *st) {
 // Consultas
 // ------------------------------------------------------------------------------------------------
 
-size_t tarm_symbol_table_data_size(DataType type) {
+size_t tarm_symbol_table_data_size(BaseType type) {
     switch (type) {
         case Char:   return 1;
         case Int:    return 4;
@@ -84,7 +84,7 @@ size_t tarm_symbol_table_data_size(DataType type) {
         case String: return 16;
         case Void:   return 0;
     }
-    // Inalcançável para um DataType válido; o `-Wswitch` avisa se um caso novo ficar de fora.
+    // Inalcançável para um BaseType válido; o `-Wswitch` avisa se um caso novo ficar de fora.
     return 0;
 }
 
@@ -110,7 +110,7 @@ int tarm_symbol_table_lookup(const SymbolTable *st,
 DataType tarm_symbol_table_type(const SymbolTable *st,
                                 const char *name, uint32_t name_len) {
     const Symbol *sym = tarm_symbol_table_find(st, name, name_len);
-    return sym ? sym->type : Int64;
+    return sym ? sym->type : tarm_datatype_of(Int64);
 }
 
 int tarm_symbol_table_string_length(const SymbolTable *st,
@@ -136,7 +136,8 @@ bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_
     if (find_mut(st, name, name_len) != NULL)
         return false;   // redeclaração — quem chama reporta, com a posição do nó
 
-    size_t bytes = (size > 0) ? size : tarm_symbol_table_data_size(type);
+    size_t bytes = (size > 0) ? size : tarm_symbol_table_data_size(type.type);
+    if(type.is_array) bytes = bytes * (size_t)type.array_len;
 
     // Cada slot ocupa um múltiplo de 8: mantém os acessos alinhados e simplifica o prólogo.
     st->current_stack_offset -= (int)align_up(bytes, 8);
@@ -171,7 +172,7 @@ bool tarm_symbol_table_declare_global(SymbolTable *st, const char *name, uint32_
     sym->name_len  = name_len;
     sym->offset    = 0;   // globais não usam offset de frame
     sym->type      = type;
-    sym->size      = (size > 0) ? size : tarm_symbol_table_data_size(type);
+    sym->size      = (size > 0) ? size : tarm_symbol_table_data_size(type.type);
     sym->label_id  = st->next_label_id++;
     sym->is_global = true;
 

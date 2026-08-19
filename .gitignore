@@ -29,3 +29,6 @@ playground/*
 # Saída de compilar example.tm: o .s e o binário são gerados, só a fonte é versionada.
 /example
 /example.s
+
+# Rascunhos de teste da raiz (dummy.tm, dummy.s, dummy): não entram no versionamento.
+/dummy*

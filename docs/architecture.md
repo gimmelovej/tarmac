@@ -191,6 +191,16 @@ lista de filhos cresce numa `ExprList`, vetor comum de heap, e só no fim é cop
 `ast_list_commit`, que já devolve o temporário ao sistema. É o mesmo motivo pelo qual o `Buffer` do
 arquivo e a `TokenList` também vivem fora da arena: só o que tem tamanho final conhecido entra nela.
 
+**Categoria e forma também são campos distintos.** O tipo de um valor mora em `DataType`
+(`types.h`), que envolve um `BaseType` — a categoria (`Int`, `String`, ...) — e acrescenta a forma:
+`is_array`, `array_len` e o `size_of` de **um** elemento. Um array não ganha categoria própria:
+`int[3]` guarda `Int` em `type`, e o que o distingue de um `int` é o `is_array`.
+
+Separar as duas dimensões evita duplicar cada tipo da linguagem numa versão "array de", e mantém
+indexado por uma dimensão só tudo que se importa apenas com a categoria — as máscaras de tipo
+aceito da `FunctionTable`, o despacho de `print` por tipo de argumento, as mensagens de erro. Quem
+precisa da forma lê os campos ao lado.
+
 **Tag e tipo são campos distintos.** `kind` diz o que o nó **é** (a construção) e `type` diz o que
 ele **vale** (o `DataType` resolvido pela análise semântica). Os dois convivem porque respondem a
 perguntas diferentes: a Codegen despacha pelo primeiro e escolhe a rotina de runtime pelo segundo —

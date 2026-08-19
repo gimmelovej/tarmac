@@ -42,7 +42,7 @@ static FunctionSignature *entry_push(FunctionTable *ft) {
 
 // Registro de uma nativa com rótulo único no runtime. O nome é um literal estático, então `strlen`
 // aqui é seguro — ao contrário das fatias do buffer de origem, que não terminam em '\0'.
-static FunctionSignature *register_native(FunctionTable *ft, const char *name, DataType ret_type,
+static FunctionSignature *register_native(FunctionTable *ft, const char *name, BaseType ret_type,
                                           const char *symbol) {
     FunctionSignature *sig = entry_push(ft);
     if (!sig) return NULL;
@@ -57,7 +57,7 @@ static FunctionSignature *register_native(FunctionTable *ft, const char *name, D
 }
 
 // Um parâmetro de tipo exato, na próxima posição livre.
-static void add_param(FunctionSignature *sig, DataType type) {
+static void add_param(FunctionSignature *sig, BaseType type) {
     if (sig->param_count >= TARM_MAX_PARAMS) return;
     sig->params[sig->param_count++] = type;
 }
@@ -147,7 +147,7 @@ bool tarm_function_table_register_natives(FunctionTable *ft) {
 }
 
 bool tarm_function_table_declare(FunctionTable *ft, const char *name, uint32_t name_len,
-                                 DataType ret_type, const DataType *params, size_t param_count,
+                                 BaseType ret_type, const BaseType *params, size_t param_count,
                                  const char **out_reason) {
     if (param_count > TARM_MAX_PARAMS) {
         if (out_reason) *out_reason = "parâmetros demais";
@@ -195,7 +195,7 @@ const FunctionSignature *tarm_function_table_find(const FunctionTable *ft,
 
 const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft,
                                                          const char *name, uint32_t name_len,
-                                                         DataType receiver) {
+                                                         BaseType receiver) {
     for (size_t i = 0; i < ft->count; i++) {
         const FunctionSignature *sig = &ft->data[i];
         if (sig->is_method &&
@@ -231,7 +231,7 @@ uint32_t tarm_function_table_accepted_mask(const FunctionSignature *sig, size_t 
     return TARM_TYPE_BIT(sig->params[index]);
 }
 
-const char *tarm_function_table_symbol(const FunctionSignature *sig, DataType dispatch_type) {
+const char *tarm_function_table_symbol(const FunctionSignature *sig, BaseType dispatch_type) {
     if (!sig->is_native)
         return NULL;   // função do usuário: o rótulo sai do nome, na Codegen
 
