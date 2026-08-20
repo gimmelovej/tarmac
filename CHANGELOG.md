@@ -9,6 +9,40 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.2.1-alpha] - 2026-08-19
+
+Correções do suporte a array que entrou na `0.2.0-alpha`, mais a **atribuição a elemento**. Os dois
+bugs que corrompiam memória — sobreposição de elementos e frame subdimensionado — saíram.
+
+> 🚧 O recurso continua **em desenvolvimento**. O caminho de **escrita** ainda não confere o que o
+> de leitura confere: `v[i] = 5` com `i` variável compila e escreve num offset arbitrário. Ver
+> [Arrays](README.md#arrays-novo-e-em-desenvolvimento) e o [`TODO.md`](TODO.md), onde é o item 1.
+
+### Adicionado
+- **Atribuição a elemento de array** (`v[0] = 9`), com a mesma coerção implícita de qualquer
+  atribuição. O alvo já era reconhecido pelo Parser desde a `0.2.0-alpha`; agora a análise semântica
+  resolve o tipo esperado e a Codegen emite o endereço do slot.
+
+### Corrigido
+- **Elementos não se sobrepõem mais.** O inicializador gravava tudo com `movq` (8 bytes) num passo
+  de `size_of`, então num `int[3]` cada elemento invadia o seguinte e `{10, 20, 30}` lia de volta
+  `10 0 30`. Três helpers passam a escolher a largura do acesso pelo tamanho do elemento:
+  `mov_suffix`/`reg_a` na escrita e `mov_load` na leitura — esta com extensão de **sinal**, para que
+  um `int` negativo continue negativo em `%rax`.
+- **Espaço reservado no frame.** `count_slots` contava um slot por declaração e `declare_local`
+  reservava `SLOT_SIZE`; um `int[10]` reservava 8 bytes e escrevia 40, invadindo o resto do frame.
+  Agora `count_slots` soma `ceil(size_of * array_len / 8)` slots e `declare_local` deixa o tamanho a
+  cargo da tabela de símbolos, que multiplica por `array_len` — as duas contas precisam concordar,
+  porque uma dimensiona o `subq` e a outra distribui os offsets dentro dele.
+- **Faixa do índice** comparava com `>` no lugar de `>=`: `v[2]` num `int[2]` passava. A mensagem
+  também ficou mais direta ("elemento fora de alcance").
+- **`-Wpedantic` em `count_slots`**: um rótulo de `case` seguido direto de uma declaração não é
+  válido em C11. A build volta a sair sem nenhum aviso.
+
+### Alterado
+- `example.tm` passa a usar `int[3]` (era `int64[3]`, escolhido só para contornar a sobreposição) e
+  cobre a atribuição a elemento e um `char[4]`.
+
 ## [0.2.0-alpha] - 2026-08-17
 
 Suporte inicial a **arrays** — o primeiro recurso da linguagem que nasce neste port, e não veio

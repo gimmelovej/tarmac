@@ -93,14 +93,13 @@ int function main()
 
     // --- ARRAYS: recurso novo, ainda em desenvolvimento -----------------------------------------
     //
-    // O tamanho vem antes do nome (`int64[3] v`), colado ao tipo — assim o tipo é lido de uma vez
-    // só, com a forma junto. O inicializador `{ ... }` só vale numa declaração.
+    // O tamanho vem antes do nome (`int[3] v`), colado ao tipo — assim o tipo é lido de uma vez só,
+    // com a forma junto. O inicializador `{ ... }` só vale numa declaração.
     //
-    // Este exemplo usa `int64` de propósito: com elementos de 8 bytes, o passo que a geração de
-    // código emite bate com o tamanho do elemento. Num `int[3]` (4 bytes) os elementos ainda se
-    // sobrepõem — é a primeira pendência do TODO.md.
+    // Cada elemento é lido e escrito na largura do seu tipo, então tipos de 1, 4 e 8 bytes convivem
+    // sem se sobrepor: um `int[3]` ocupa 12 bytes, um `char[4]` ocupa 4.
     print("array (novo): ");
-    int64[3] medidas = { 10, 20, 30 };
+    int[3] medidas = { 10, 20, 30 };
     print(medidas[0]);
     print(" ");
     print(medidas[1]);
@@ -108,9 +107,20 @@ int function main()
     print(medidas[2]);
     print("\n");
 
+    // Atribuir a um elemento já funciona, com a mesma coerção implícita de qualquer atribuição.
+    medidas[1] = 99;
+    print("array (atribuicao): ");
+    print(medidas[1]);
+    print("\n");
+
+    char[4] iniciais = { 'T', 'a', 'r', 'm' };
+    print("array de char: ");
+    print(iniciais[0]);
+    print(iniciais[3]);
+    print("\n");
+
     // O índice precisa ser literal por enquanto, e a faixa é conferida em tempo de compilação:
-    // `medidas[9]` seria recusado pela análise semântica. Atribuir a um elemento
-    // (`medidas[0] = 5;`) ainda não é gerado.
+    // `medidas[3]` seria recusado pela análise semântica.
 
     // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio
     // depois de `a`. O `mmap` mapeia regiões independentes, liberadas por ponteiro e tamanho.

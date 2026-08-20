@@ -8,6 +8,13 @@ on:
   pull_request:
     branches: [main, development]
 
+# Um push novo cancela o run anterior do mesmo ref. Sem isso, uma sequência de commits enfileira um
+# run por commit — e a fila do Actions já foi de horas aqui, a ponto de o run ser cancelado por
+# tempo limite antes de sair do lugar. O que interessa é o resultado do último commit.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-and-smoke:
     runs-on: ubuntu-latest

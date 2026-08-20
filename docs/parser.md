@@ -136,8 +136,8 @@ isso ao chamar a si mesma para o lado direito, e é por isso que `a = b = c` vir
 **Alvo de atribuição.** O lado esquerdo é reconhecido como expressão qualquer e só depois é
 conferido: se não for um `ExprIdentifier` nem um `ExprIndex`, sai erro de sintaxe apontando o início
 dele. Isso mantém a produção simples e ainda assim rejeita `1 = 2` com uma mensagem específica, em
-vez de um "token inesperado" genérico. (Um `ExprIndex` passa pelo Parser, mas a geração de código
-ainda o recusa — ver [Arrays](#arrays-novo-e-em-desenvolvimento).)
+vez de um "token inesperado" genérico. O `ExprIndex` como alvo é o que permite `v[0] = 9` — ver
+[Arrays](#arrays-novo-e-em-desenvolvimento).
 
 ---
 
@@ -187,14 +187,15 @@ A decodificação acontece em quem materializa o valor, e por isso em dois lugar
 ## Arrays (novo e em desenvolvimento)
 
 > 🚧 **Recurso novo.** Chegou na `0.2.0-alpha` e ainda é a parte mais instável da linguagem. Já dá
-> para declarar, inicializar e ler; o que **não** funciona está listado no fim desta seção e no
-> [`TODO.md`](../TODO.md).
+> para declarar, inicializar, ler e **atribuir a um elemento**; o que **não** funciona está listado
+> no fim desta seção e no [`TODO.md`](../TODO.md).
 
 O tamanho vem **antes** do nome, colado ao tipo — `int[3] v`, e não `int v[3]` como em C:
 
 ```tarmac
 int[3] v = { 10, 20, 30 };
 print(v[0]);
+v[1] = 99;
 ```
 
 Ler a forma de uma vez só é o motivo da escolha. `parse_type` consome a palavra-chave e o `[N]`
@@ -211,21 +212,32 @@ precedência, não pode ser passado a uma função nem devolvido de uma. Quem lh
 A indexação entra em `parse_postfix`, no mesmo nível da chamada de método. O resultado de `v[i]` é o
 elemento: mesmo tipo base, com a forma de array desligada.
 
+### Largura do acesso
+
+Cada elemento é lido e escrito **na largura do seu tipo**, e não em 64 bits como o resto das
+expressões. É o que faz um `int[3]` ocupar 12 bytes em vez de sobrepor os elementos: `mov_suffix` e
+`reg_a` (codegen.c) escolhem o par instrução/registrador pela `size_of` do elemento, e `mov_load`
+escolhe a leitura — que estende o **sinal** até `%rax`, para que um `int` negativo continue negativo
+onde o resto da expressão o encontra.
+
+O espaço é reservado nos dois lugares que precisam concordar: `count_slots` soma quantos slots de 8
+bytes o array ocupa, dimensionando o `subq` do prólogo, e `tarm_symbol_table_declare` distribui os
+offsets com `size_of * array_len`.
+
 ### O que ainda não funciona
 
 | Limitação | Onde | Efeito |
 |---|---|---|
-| **Elementos se sobrepõem na memória** | Codegen grava cada elemento com `movq` (8 bytes) num passo de `size_of` (4, num `int`) | `{10, 20, 30}` lê de volta `10 0 30` |
-| **Espaço do frame subdimensionado** | `count_slots` conta um slot por declaração, e `declare_local` reserva `SLOT_SIZE` (8 bytes) | um `int[10]` reserva 8 bytes e escreve 40, invadindo o resto do frame |
-| **Atribuir a um elemento** | `v[0] = 9` | o Parser aceita o alvo, a Codegen recusa com "alvo de atribuição não suportado" |
-| **Índice variável** | `v[i]` com `i` variável | só índice literal é aceito; o resto vira erro |
-| **Faixa com `>` no lugar de `>=`** | análise semântica | `v[2]` num `int[2]` passa pela checagem |
-| **Sem verificação em tempo de execução** | — | um índice fora da faixa que escape da checagem estática lê memória vizinha |
+| **Atribuição não confere índice nem base** | análise semântica e Codegen, caso `ExprIndex` de `ExprAssign` | `v[i] = 5` com `i` variável **compila** e escreve num offset arbitrário (`744(%rbp)` num teste); `x[5] = 9` num escalar também passa |
+| **Índice variável na leitura** | `v[i]` com `i` variável | recusado — só índice literal é aceito |
+| **Sem verificação em tempo de execução** | — | um índice fora da faixa que escape da checagem estática lê ou escreve memória vizinha |
 | **Array como parâmetro, retorno ou global** | — | não reconhecido |
 | **`{}` vazio** | `parse_array_literal` confere `RParen` no lugar de `RBrace` | erro confuso: "token inesperado: '}'" |
+| **Menos elementos que o declarado** | — | `int[3] v = {1}` é aceito, e os dois últimos ficam com lixo da stack |
 
-Enquanto isso não fecha, o uso seguro é o do [`example.tm`](../example.tm): array pequeno, de tipo
-de 8 bytes (`int64`), com índice literal.
+A assimetria entre leitura e escrita é a pendência mais séria: o caminho de leitura confere que a
+base é um array, que o índice é literal e que ele cabe na faixa; o de escrita não confere nenhuma
+das três. Está no topo do [`TODO.md`](../TODO.md).
 
 ---
 

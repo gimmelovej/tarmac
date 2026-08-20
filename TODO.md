@@ -12,19 +12,20 @@ Convenção das marcas: 🔴 corrige um comportamento errado · 🟡 completa al
 
 ## Patch — arrays (`0.2.x`)
 
-O suporte a array entrou na `0.2.0-alpha` e é a parte mais instável da linguagem. Estes são os itens
-que fecham o recurso, na ordem em que fazem sentido.
+O suporte a array entrou na `0.2.0-alpha` e a `0.2.1-alpha` fechou a maior parte do que faltava:
+largura de acesso por elemento, espaço correto no frame, faixa conferida e atribuição a elemento.
+O que resta, na ordem em que faz sentido atacar:
 
 | # | Marca | Item | Onde |
 |---|---|---|---|
-| 1 | 🔴 | **Elementos se sobrepõem.** O inicializador grava cada elemento com `movq` (8 bytes) num passo de `size_of` (4 bytes num `int`), então `{10, 20, 30}` lê de volta `10 0 30`. Emitir a instrução com a largura do elemento, ou padronizar o slot em 8 bytes. | `codegen.c`, caso `ExprVarDecl` |
-| 2 | 🔴 | **Frame subdimensionado.** `count_slots` conta um slot por declaração e `declare_local` reserva `SLOT_SIZE`; um `int[10]` reserva 8 bytes e escreve 40, invadindo o resto do frame. Contar `array_len` slots e reservar `size_of * array_len`. | `codegen.c`, `symbol_table.c` |
-| 3 | 🔴 | **Faixa com `>` no lugar de `>=`.** `v[2]` num `int[2]` passa pela checagem estática. | `semantic.c`, caso `ExprIndex` |
-| 4 | 🔴 | **Índice não literal lê `as.integer`.** Um `v[i]` com `i` variável lê a variante errada da união antes de chegar à Codegen. Conferir `kind == ExprInteger` antes. | `semantic.c`, caso `ExprIndex` |
-| 5 | 🟡 | **Atribuir a um elemento** (`v[0] = 9`): o Parser aceita o alvo, a Codegen recusa. Falta calcular o endereço do slot no caso `ExprIndex` do `ExprAssign`. | `codegen.c` |
-| 6 | 🟡 | **Índice variável**, com aritmética de endereço em tempo de execução (`base + i * size_of`). | `codegen.c` |
-| 7 | 🟡 | **`{}` vazio** produz "token inesperado: '}'": o teste de lista vazia confere `RParen` no lugar de `RBrace`. | `parser.c`, `parse_array_literal` |
-| 8 | 🟡 | **Array global**, em `.data`, com o literal virando uma sequência de `.quad`. | `codegen.c` |
+| 1 | 🔴 | **A escrita não confere o que a leitura confere.** O caso `ExprIndex` de `ExprAssign` não testa se a base é um array, se o índice é literal nem se ele cabe na faixa. `v[i] = 5` com `i` variável lê a variante errada da união e vira um offset arbitrário (`744(%rbp)` num teste); `x[5] = 9` num escalar passa igual. É a mesma checagem que a leitura já faz — falta espelhá-la. | `semantic.c`, `codegen.c` |
+| 2 | 🔴 | **`sym` usado sem teste de NULL** no caso `ExprIndex` de `ExprAssign` da Codegen. Chega lá com a semântica limpa, mas é a única leitura da tabela de símbolos sem rede. | `codegen.c` |
+| 3 | 🟡 | **Inicializador menor que o declarado** é aceito em silêncio: `int[3] v = {1}` deixa os dois últimos elementos com lixo da stack. Zerar o resto, ou recusar. | `semantic.c`, `codegen.c` |
+| 4 | 🟡 | **Índice variável na leitura**, com aritmética de endereço em tempo de execução (`base + i * size_of`). Junto com o item 1, é o que torna array útil dentro de um `while`. | `codegen.c` |
+| 5 | 🟡 | **`{}` vazio** produz "token inesperado: '}'": o teste de lista vazia confere `RParen` no lugar de `RBrace`. | `parser.c`, `parse_array_literal` |
+| 6 | 🟡 | **`array_len - 1` quando `array_len` é 0**: a conta é em `size_t` e dá a volta. Um `int[0]` só não chega lá porque o `{}` falha antes. | `semantic.c` |
+| 7 | 🟡 | **Array global**, em `.data`, com o literal virando uma sequência de `.quad`. | `codegen.c` |
+| 8 | 🟢 | **Verificação de faixa em tempo de execução**, para o índice que a checagem estática não alcança. | `codegen.c`, runtime |
 | 9 | 🟢 | **Array como parâmetro e retorno** de função — passa a exigir uma decisão sobre passagem por referência. | todas as etapas |
 | 10 | 🟢 | **`len()` sobre array**, hoje só disponível para `string`. | `function_table.c` |
 

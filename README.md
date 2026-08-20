@@ -21,11 +21,12 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
 > `if`/`else`, `while`, strings, chamadas nativas e alocação.
 >
-> 🚧 **Novidade da `0.2.0-alpha`: arrays.** `int64[3] v = { 10, 20, 30 };` e `v[0]` já funcionam de
-> ponta a ponta. É o recurso mais novo e **o mais instável** da linguagem: elementos de menos de 8
-> bytes ainda se sobrepõem, o índice precisa ser literal e atribuir a um elemento não é gerado. As
-> limitações estão listadas sem rodeio em [Arrays](#arrays-novo-e-em-desenvolvimento) e no
-> [`TODO.md`](TODO.md) — use com essa ressalva em mente.
+> 🚧 **Arrays (novo, em desenvolvimento).** `int[3] v = { 10, 20, 30 };`, `v[0]` e agora
+> `v[1] = 99;` funcionam de ponta a ponta, em qualquer largura de elemento. Continua sendo a parte
+> mais instável da linguagem: o índice precisa ser literal, e o caminho de **escrita** ainda não
+> confere o que o de leitura confere. As limitações estão listadas sem rodeio em
+> [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md) — use com essa ressalva em
+> mente.
 
 ---
 
@@ -101,26 +102,29 @@ Chegaram na `0.2.0-alpha`. O tamanho vem **antes** do nome, colado ao tipo — a
 uma vez só, com a forma junto:
 
 ```tarmac
-int64[3] medidas = { 10, 20, 30 };
+int[3] medidas = { 10, 20, 30 };
 print(medidas[1]);                  // imprime: 20
+medidas[1] = 99;                    // atribuição a elemento
 ```
 
-O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler um elemento por
-índice literal, e a checagem em tempo de compilação do tipo de cada elemento e da faixa do índice.
+O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler e atribuir um
+elemento por índice literal, e a checagem em tempo de compilação do tipo de cada elemento e da faixa
+do índice. Cada elemento é acessado na largura do seu tipo, então `int[3]` (12 bytes) e `char[4]`
+(4 bytes) convivem sem se sobrepor.
 
 O que **ainda não**, e vale saber antes de usar:
 
 | Limitação | Efeito prático |
 |---|---|
-| Elementos de menos de 8 bytes se sobrepõem | `int[3] v = {10,20,30}` lê de volta `10 0 30`; use `int64` por enquanto |
-| O frame reserva um slot por array, não `array_len` | um array grande invade o resto da stack frame |
-| Índice precisa ser literal | `v[i]` com `i` variável é recusado |
-| Atribuir a um elemento não é gerado | `v[0] = 9` vira erro de "alvo de atribuição não suportado" |
-| A faixa usa `>` no lugar de `>=` | `v[2]` num `int[2]` passa pela checagem |
+| A **escrita** não confere índice nem base | `v[i] = 5` com `i` variável compila e escreve num offset arbitrário; `x[5] = 9` num escalar também passa |
+| Índice precisa ser literal na leitura | `v[i]` com `i` variável é recusado |
+| Sem verificação em tempo de execução | um índice que escape da checagem estática lê ou escreve memória vizinha |
+| Inicializador menor que o declarado | `int[3] v = {1}` é aceito, e o resto fica com lixo da stack |
 | Sem array como parâmetro, retorno ou global | não reconhecido |
 
-Cada uma delas está no [`TODO.md`](TODO.md), com o arquivo e a correção prevista; o detalhamento
-técnico está em [`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento).
+A assimetria entre leitura e escrita é a mais séria, e está no topo do [`TODO.md`](TODO.md); o
+detalhamento técnico está em
+[`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento).
 
 > Dois recursos do [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) não vieram para este
 > port: o tipo **`buffer`** (e a nativa `read_buf` que o produzia) e o **ponto flutuante** na
@@ -189,12 +193,13 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
 | Parser | Menos unário, `!=`, `&&`/`||` | ⚪ Não iniciado | `-5` é erro de sintaxe; não há token para os operadores lógicos |
-| Array | Declaração com tamanho fixo (`int64[3] v`), inicializador `{ ... }` e leitura por índice literal | 🟡 **Novo, em desenvolvimento** | funciona de ponta a ponta para elementos de 8 bytes; ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
-| Array | Elementos de menos de 8 bytes | 🔴 Bug conhecido | o inicializador grava com `movq` num passo de `size_of`, então `int[3] {10,20,30}` lê `10 0 30` |
-| Array | Espaço reservado no frame | 🔴 Bug conhecido | `count_slots` conta um slot por declaração: um `int[10]` reserva 8 bytes e escreve 40 |
-| Array | Atribuição a elemento (`v[0] = 9`) | 🟡 Recusada | o Parser aceita o alvo, a Codegen ainda não emite o endereço do slot |
-| Array | Índice variável | 🟡 Recusado | só índice literal; falta a aritmética de endereço em tempo de execução |
-| Array | Checagem de faixa | 🟡 Parcial | compara com `>` no lugar de `>=`, e só vale para índice literal |
+| Array | Declaração com tamanho fixo (`int[3] v`), inicializador `{ ... }`, leitura e atribuição por índice literal | 🟡 **Novo, em desenvolvimento** | ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
+| Array | Acesso na largura do elemento | 🟢 Implementado | `mov_suffix`/`reg_a` na escrita e `mov_load` (com extensão de sinal) na leitura: `int[3]` ocupa 12 bytes, `char[4]` ocupa 4 |
+| Array | Espaço reservado no frame | 🟢 Implementado | `count_slots` soma `ceil(size_of * array_len / 8)` slots, e a tabela de símbolos distribui os offsets pela mesma conta |
+| Array | Checagem estática de faixa (leitura) | 🟢 Implementado | índice literal fora de `[0, array_len)` é recusado |
+| Array | Checagem na **atribuição** | 🔴 Ausente | o caminho de escrita não confere se a base é array nem se o índice cabe: `v[i] = 5` com `i` variável compila e escreve num offset arbitrário |
+| Array | Índice variável | 🟡 Recusado na leitura | falta a aritmética de endereço em tempo de execução |
+| Array | Inicializador menor que o declarado | 🟡 Aceito em silêncio | `int[3] v = {1}` deixa o resto com lixo da stack |
 | Array | Como parâmetro, retorno ou variável global | ⚪ Não iniciado | — |
 | AST | Nós da árvore: união etiquetada por `ExprKind`, com o tipo resolvido em `type` e a posição de origem em cada nó | 🟢 Implementado | nomes e textos são fatias do buffer, como nos tokens; ver [`docs/architecture.md`](docs/architecture.md#a-ast-como-união-etiquetada) |
 | Tipos | `BaseType` (categoria) separado de `DataType` (categoria + forma de array) | 🟢 Implementado | evita duplicar cada tipo numa versão "array de"; quem só precisa da categoria lê `type` |

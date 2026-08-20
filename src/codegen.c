@@ -59,6 +59,27 @@ static void call_unalign(Codegen *cg, int pad) {
 // Auxiliares
 // ------------------------------------------------------------------------------------------------
 
+// Largura do acesso à memória, derivada do tamanho do elemento. Toda expressão trabalha em 64 bits
+// e deixa o resultado em `%rax` (ver codegen.h), mas um elemento de array ocupa só o seu tamanho —
+// escrever 8 bytes num slot de 4 invadiria o elemento seguinte, que foi o que aconteceu enquanto o
+// inicializador usava `movq` para tudo.
+//
+// Os três andam juntos: `mov_suffix` e `reg_a` formam o par da **escrita** (`movl %eax, ...`), e
+// `mov_load` a instrução da **leitura**.
+static const char *mov_suffix(size_t sz){ return sz==1?"b":sz==2?"w":sz==4?"l":"q"; }
+static const char *reg_a(size_t sz){ return sz==1?"%al":sz==2?"%ax":sz==4?"%eax":"%rax"; }
+
+// A leitura estende o **sinal** até 64 bits, e não apenas copia os bytes: um `int` negativo lido de
+// um slot de 4 bytes precisa continuar negativo em `%rax`, onde o resto da expressão o encontra.
+static const char *mov_load(size_t sz) {
+    switch (sz) {
+        case 1: return "movsbq";
+        case 2: return "movswq";
+        case 4: return "movslq";
+        default: return "movq";
+    }
+}
+
 static size_t next_label(Codegen *cg) {
     return cg->label_counter++;
 }
@@ -68,20 +89,24 @@ static void unsupported(Codegen *cg, const Expr *e, const char *what) {
                   "geração de código ainda não suporta %s", what);
 }
 
-// Reserva um slot no frame corrente para a variável e devolve o offset relativo a `%rbp`.
+// Reserva espaço no frame corrente para a variável e devolve o offset relativo a `%rbp`.
+//
+// O tamanho vai como 0 de propósito: é a tabela de símbolos que o resolve a partir do `DataType`,
+// e é lá que um array pede `size_of * array_len` em vez de um slot só.
 static bool declare_local(Codegen *cg, const Expr *decl, int *out_offset) {
     return tarm_symbol_table_declare(&cg->symbols,
                                      decl->as.var_decl.obj->as.identifier.name,
                                      decl->as.var_decl.obj->as.identifier.len,
                                      decl->as.var_decl.type,
-                                     SLOT_SIZE, out_offset);
+                                     0, out_offset);
 }
 
 // Percorre a subárvore somando os slots que o corpo vai precisar. Roda **antes** de emitir o
 // prólogo, porque o `subq` precisa do total e as declarações só aparecem no meio do corpo.
 //
-// NOTA: conta **um** slot por declaração, inclusive para um array. Um `int[10]` reserva 8 bytes no
-// cálculo do frame e escreve 40 — ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+// Um array conta quantos slots de 8 bytes couberem no seu tamanho total, arredondando para cima —
+// a mesma conta que `tarm_symbol_table_declare` faz ao distribuir os offsets. As duas precisam
+// concordar: esta dimensiona o `subq`, aquela decide onde cada variável cai dentro dele.
 static size_t count_slots(Expr *const *items, size_t count) {
     size_t n = 0;
     for (size_t i = 0; i < count; i++) {
@@ -89,9 +114,18 @@ static size_t count_slots(Expr *const *items, size_t count) {
         if (!e) continue;
 
         switch (e->kind) {
-            case ExprVarDecl:
-                n++;
+            // O bloco não é enfeite: em C11 um rótulo precisa preceder uma instrução, e uma
+            // declaração não é uma — sem as chaves, o `-Wpedantic` acusa.
+            case ExprVarDecl: {
+                const DataType *t = &e->as.var_decl.type;
+                if (t->is_array) {
+                    size_t bytes = t->size_of * (size_t)t->array_len;
+                    n += (bytes + SLOT_SIZE - 1) / SLOT_SIZE;   // arredonda para cima
+                } else {
+                    n++;
+                }
                 break;
+            }
             case ExprConditional:
                 n += count_slots(e->as.conditional.then_body, e->as.conditional.then_count);
                 n += count_slots(e->as.conditional.else_body, e->as.conditional.else_count);
@@ -390,8 +424,8 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
         size_t esz = e->type.size_of;
         if (e->as.index.index->kind == ExprInteger) {
             int64_t i = e->as.index.index->as.integer.value;
-            fprintf(cg->out, "    movl    %d(%%rbp), %%eax\n",
-                    sym->offset + (int)(i * (int64_t)esz));
+            fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n",
+                mov_load(esz), sym->offset + (int)(i * (int64_t)esz));
             return true;
         }
 
@@ -427,9 +461,25 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             fprintf(cg->out, "    movq    %%rax, %s\n", operand);
             return true;
         }
-        // Atribuir a um elemento (`v[0] = 9`) ainda não é emitido: o Parser reconhece o alvo, mas
-        // falta calcular o endereço do slot aqui. Cai no `default` e vira erro explícito.
-        case ExprIndex:
+        // Atribuir a um elemento: o valor já está em `%rax` (gerado acima, antes do `switch`), e o
+        // que falta é o endereço. Ele sai da mesma conta da leitura — `slot + i * size_of` — com a
+        // escrita na largura do elemento.
+        //
+        // NOTA: nada aqui confere o que a leitura confere. Um índice não literal lê a variante
+        // errada da união e vira um offset arbitrário; uma base que não é array passa direto. Os
+        // dois estão no TODO.md, no topo da lista.
+        case ExprIndex:{
+            Expr *base = target->as.index.base;
+            Expr *index = target->as.index.index;
+
+            const Symbol *sym = tarm_symbol_table_find(&cg->symbols, base->as.identifier.name, base->as.identifier.len);
+
+            size_t esz = sym->type.size_of;
+            int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
+            fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
+                    mov_suffix(esz), reg_a(esz), el_offset);
+            return true;
+        }
         default:
             tarm_error_at(cg->diag, target->line, target->col,
                         "alvo de atribuição não suportado");
@@ -466,8 +516,9 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                 int offset_pool = offset;
                 size_t esz = e->as.var_decl.type.size_of;
                 for (size_t i = 0; i < init->as.array_lit.count; i++) {
-                    if (!gen_expr(cg, init->as.array_lit.elements[i])) return false;
-                    fprintf(cg->out, "    movq    %%rax, %d(%%rbp)\n", offset_pool);
+                   if (!gen_expr(cg, init->as.array_lit.elements[i])) return false;
+                    fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
+                            mov_suffix(esz), reg_a(esz), offset_pool);
                     offset_pool += (int)esz;
                 }
                 return true;

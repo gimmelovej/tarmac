@@ -436,8 +436,8 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
     }
     // O resultado de `v[i]` é o **elemento**: o mesmo tipo base, com a forma de array desligada.
     //
-    // NOTA: a faixa só é conferida quando o índice é literal, e a comparação usa `>` onde deveria
-    // usar `>=` — `v[2]` num `int[2]` passa. Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+    // NOTA: a faixa só é conferida quando o índice é **literal**; um índice variável chega aqui
+    // lendo a variante errada da união. Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
     case ExprIndex:
     {
         DataType base_t = check_expr(an, &e->as.index.base);
@@ -457,8 +457,8 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
         }
         
         Expr *index = e->as.index.index;
-        if(index->as.integer.value > (int64_t)base_t.array_len || index->as.integer.value < 0){
-            tarm_error_at(an->diag, e->line, e->col, "elemento fora do espaço reservado");
+        if(index->as.integer.value > (int64_t)(base_t.array_len -1 ) || index->as.integer.value < 0){
+            tarm_error_at(an->diag, e->line, e->col, "elemento fora de alcance");
             result = tarm_datatype_of(Void);
             break;
         }
@@ -479,12 +479,11 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
     // --- atribuição -------------------------------------------------------------------------
     case ExprAssign:
     {
+        Expr *target = e->as.assign.target;
         switch (e->as.assign.target->kind)
         {
         case ExprIdentifier:
         {
-            Expr *target = e->as.assign.target;
-
             if (!target->as.identifier.name || !target->as.identifier.len)
             {
                 tarm_error_at(an->diag, target->line, target->col,
@@ -510,9 +509,42 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
             result = target_t;
             break;
         }
+        // Atribuir a um elemento (`v[0] = 9`). O tipo esperado do lado direito é o da variável
+        // indexada, com a coerção implícita valendo como em qualquer atribuição.
+        //
+        // NOTA: diferente da **leitura** de `v[i]`, este caminho ainda não confere se a base é de
+        // fato um array nem se o índice cabe na faixa — `x[5] = 9` num escalar passa. Ver o TODO.md.
+        case ExprIndex:{
+            Expr *base = target->as.index.base;
+            if(!base->as.identifier.name || !base->as.identifier.len){
+                tarm_error_at(an->diag, base->line, base->col,
+                              "variável sem slot na geração de código: '%.*s'",
+                              (int)base->as.identifier.len,
+                              base->as.identifier.name);
+                return tarm_datatype_of(Void);
+            }
+
+            const Symbol *sym = tarm_symbol_table_find(an->symbols, base->as.identifier.name, base->as.identifier.len);
+            if (!sym)
+            {
+                tarm_error_at(an->diag, e->line, e->col,
+                              "atribuição a variável não declarada: '%.*s'",
+                              (int)base->as.identifier.len, base->as.identifier.name);
+                check_expr(an, &e->as.assign.value); 
+                result = tarm_datatype_of(Void);
+                break;
+            }
+
+            DataType target_t = sym->type;
+            expect_type(an, &e->as.assign.value, target_t, "atribuição");
+            result = target_t;
+
+
+            break;
+        }
         default:
             tarm_error_at(an->diag, e->line, e->col,
-                          "alvo de atribuição não suportado");
+                          "atribuição semanticamente não permitida");
         }
         break;
     }
