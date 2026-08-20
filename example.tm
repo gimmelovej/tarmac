@@ -113,14 +113,27 @@ int function main()
     print(medidas[1]);
     print("\n");
 
+    // O índice também pode ser uma variável, na leitura e na escrita — é o que torna array
+    // utilizável dentro de um laço. O endereço sai do modo escalado do x86, sem multiplicação.
+    print("array (indice variavel): ");
+    int k = 0;
+    while k < 3
+    {
+        medidas[k] = medidas[k] + 1;
+        print(medidas[k]);
+        print(" ");
+        k = k + 1;
+    }
+    print("\n");
+
     char[4] iniciais = { 'T', 'a', 'r', 'm' };
     print("array de char: ");
     print(iniciais[0]);
     print(iniciais[3]);
     print("\n");
 
-    // O índice precisa ser literal por enquanto, e a faixa é conferida em tempo de compilação:
-    // `medidas[3]` seria recusado pela análise semântica.
+    // Com índice literal a faixa é conferida em tempo de compilação (`medidas[3]` seria recusado).
+    // Com índice variável ainda não há verificação em tempo de execução — ver o TODO.md.
 
     // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio
     // depois de `a`. O `mmap` mapeia regiões independentes, liberadas por ponteiro e tamanho.

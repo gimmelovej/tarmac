@@ -407,9 +407,13 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
         fprintf(cg->out, "    movq    %s, %%rax\n", operand);
         return true;
     }
-    // Indexação. O endereço é `slot + i * size_of`, calculado em tempo de compilação — só um
-    // índice literal é aceito por enquanto, e um índice variável exigiria aritmética de endereço
-    // em tempo de execução. Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+    // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`, resolvido
+    // aqui mesmo e emitido como um deslocamento constante. Com índice variável entra o modo de
+    // endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação em
+    // tempo de execução sem instrução extra. A escala é o `size_of` do elemento, e o processador só
+    // aceita 1, 2, 4 ou 8; todos os tipos da linguagem cabem nesse conjunto.
+    //
+    // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
     case ExprIndex:{
         Expr *base = e->as.index.base;
         const Symbol *sym = tarm_symbol_table_find(&cg->symbols,
@@ -421,11 +425,17 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                           (int)base->as.identifier.len, base->as.identifier.name);
             return false;
         }
-        size_t esz = e->type.size_of;
+        size_t esz = sym->type.size_of;
+
         if (e->as.index.index->kind == ExprInteger) {
             int64_t i = e->as.index.index->as.integer.value;
             fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n",
                 mov_load(esz), sym->offset + (int)(i * (int64_t)esz));
+            return true;
+        } else if(e->as.index.index->kind == ExprIdentifier){
+            if(!gen_expr(cg, e->as.index.index)) return false;
+            fprintf(cg->out, "    %-7s %d(%%rbp, %%rax, %zu), %%rax\n",
+                mov_load(esz), sym->offset,esz);
             return true;
         }
 
@@ -462,23 +472,37 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             return true;
         }
         // Atribuir a um elemento: o valor já está em `%rax` (gerado acima, antes do `switch`), e o
-        // que falta é o endereço. Ele sai da mesma conta da leitura — `slot + i * size_of` — com a
-        // escrita na largura do elemento.
+        // que falta é o endereço — a mesma conta da leitura, com a escrita na largura do elemento.
         //
-        // NOTA: nada aqui confere o que a leitura confere. Um índice não literal lê a variante
-        // errada da união e vira um offset arbitrário; uma base que não é array passa direto. Os
-        // dois estão no TODO.md, no topo da lista.
+        // Com índice variável, o valor a gravar precisa sobreviver à avaliação do índice, que também
+        // termina em `%rax`. Daí o par push/pop em volta: o índice vai para `%rcx`, o valor volta
+        // para `%rax`, e a escrita usa o endereçamento escalado.
         case ExprIndex:{
             Expr *base = target->as.index.base;
             Expr *index = target->as.index.index;
 
             const Symbol *sym = tarm_symbol_table_find(&cg->symbols, base->as.identifier.name, base->as.identifier.len);
-
+            if (!sym) return false;
+            
             size_t esz = sym->type.size_of;
-            int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
-            fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
-                    mov_suffix(esz), reg_a(esz), el_offset);
-            return true;
+
+            if(index->kind == ExprInteger){
+                int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
+                fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
+                        mov_suffix(esz), reg_a(esz), el_offset);
+                return true;
+            } else if(index->kind == ExprIdentifier){
+                emit_push(cg, "%rax");
+                gen_expr(cg, index);
+                fprintf(cg->out, "    movq    %%rax, %%rcx\n");
+                emit_pop(cg, "%rax");
+                fprintf(cg->out, "    mov%s    %s, %d(%%rbp, %%rcx, %zu)\n",
+                        mov_suffix(esz), reg_a(esz), sym->offset, esz);
+                return true;
+            }
+            tarm_error_at(cg->diag, target->line, target->col,
+                        "alvo de atribuição não suportado");
+            return false;
         }
         default:
             tarm_error_at(cg->diag, target->line, target->col,

@@ -21,12 +21,11 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
 > `if`/`else`, `while`, strings, chamadas nativas e alocação.
 >
-> 🚧 **Arrays (novo, em desenvolvimento).** `int[3] v = { 10, 20, 30 };`, `v[0]` e agora
-> `v[1] = 99;` funcionam de ponta a ponta, em qualquer largura de elemento. Continua sendo a parte
-> mais instável da linguagem: o índice precisa ser literal, e o caminho de **escrita** ainda não
-> confere o que o de leitura confere. As limitações estão listadas sem rodeio em
-> [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md) — use com essa ressalva em
-> mente.
+> 🚧 **Arrays (novo, em desenvolvimento).** Declarar, inicializar, ler e atribuir já funcionam, com
+> índice **literal ou variável** — o que torna array utilizável dentro de um `while`. O que falta
+> para fechar o recurso está em [Arrays](#arrays-novo-e-em-desenvolvimento) e no
+> [`TODO.md`](TODO.md); o mais importante é que **não há verificação de faixa em tempo de
+> execução**.
 
 ---
 
@@ -105,25 +104,32 @@ uma vez só, com a forma junto:
 int[3] medidas = { 10, 20, 30 };
 print(medidas[1]);                  // imprime: 20
 medidas[1] = 99;                    // atribuição a elemento
+
+int i = 0;
+while i < 3 {
+    medidas[i] = medidas[i] * 2;    // índice variável, na leitura e na escrita
+    i = i + 1;
+}
 ```
 
 O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler e atribuir um
-elemento por índice literal, e a checagem em tempo de compilação do tipo de cada elemento e da faixa
-do índice. Cada elemento é acessado na largura do seu tipo, então `int[3]` (12 bytes) e `char[4]`
-(4 bytes) convivem sem se sobrepor.
+elemento por índice literal ou variável, e a checagem em tempo de compilação do tipo de cada
+elemento e — para índice literal — da faixa. Cada elemento é acessado na largura do seu tipo, então
+`int[3]` (12 bytes) e `char[4]` (4 bytes) convivem sem se sobrepor; com índice variável o endereço
+sai do modo escalado do x86, sem instrução de multiplicação.
 
 O que **ainda não**, e vale saber antes de usar:
 
 | Limitação | Efeito prático |
 |---|---|
-| A **escrita** não confere índice nem base | `v[i] = 5` com `i` variável compila e escreve num offset arbitrário; `x[5] = 9` num escalar também passa |
-| Índice precisa ser literal na leitura | `v[i]` com `i` variável é recusado |
-| Sem verificação em tempo de execução | um índice que escape da checagem estática lê ou escreve memória vizinha |
-| Inicializador menor que o declarado | `int[3] v = {1}` é aceito, e o resto fica com lixo da stack |
+| **Sem verificação de faixa em tempo de execução** | com índice variável nada garante que ele caia dentro do array: ler devolve memória vizinha, escrever a corrompe |
+| Índice só literal ou variável simples | `v[i + 1]` é recusado; falta o caminho geral de expressão |
+| Inicializador menor que o declarado | `int[3] v = {1}` é aceito, e o resto fica com o que houvesse na stack |
 | Sem array como parâmetro, retorno ou global | não reconhecido |
 
-A assimetria entre leitura e escrita é a mais séria, e está no topo do [`TODO.md`](TODO.md); o
-detalhamento técnico está em
+A verificação de faixa em tempo de execução é a mais importante — e ficou mais urgente com o índice
+variável, porque enquanto só havia literal a checagem estática cobria todos os casos. Está no topo
+do [`TODO.md`](TODO.md), e o detalhamento técnico em
 [`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento).
 
 > Dois recursos do [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) não vieram para este
@@ -193,13 +199,16 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
 | Parser | Menos unário, `!=`, `&&`/`||` | ⚪ Não iniciado | `-5` é erro de sintaxe; não há token para os operadores lógicos |
-| Array | Declaração com tamanho fixo (`int[3] v`), inicializador `{ ... }`, leitura e atribuição por índice literal | 🟡 **Novo, em desenvolvimento** | ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
+| Array | Declaração com tamanho fixo (`int[3] v`), inicializador `{ ... }`, leitura e atribuição | 🟡 **Novo, em desenvolvimento** | ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
+| Array | Índice variável, em leitura e escrita | 🟢 Implementado | endereçamento escalado do x86 (`offset(%rbp, %rcx, escala)`), sem instrução de multiplicação — é o que torna array utilizável dentro de um `while` |
 | Array | Acesso na largura do elemento | 🟢 Implementado | `mov_suffix`/`reg_a` na escrita e `mov_load` (com extensão de sinal) na leitura: `int[3]` ocupa 12 bytes, `char[4]` ocupa 4 |
 | Array | Espaço reservado no frame | 🟢 Implementado | `count_slots` soma `ceil(size_of * array_len / 8)` slots, e a tabela de símbolos distribui os offsets pela mesma conta |
-| Array | Checagem estática de faixa (leitura) | 🟢 Implementado | índice literal fora de `[0, array_len)` é recusado |
-| Array | Checagem na **atribuição** | 🔴 Ausente | o caminho de escrita não confere se a base é array nem se o índice cabe: `v[i] = 5` com `i` variável compila e escreve num offset arbitrário |
-| Array | Índice variável | 🟡 Recusado na leitura | falta a aritmética de endereço em tempo de execução |
-| Array | Inicializador menor que o declarado | 🟡 Aceito em silêncio | `int[3] v = {1}` deixa o resto com lixo da stack |
+| Array | Checagem estática de faixa | 🟢 Implementado | com índice literal, fora de `[0, array_len)` é recusado |
+| Array | Base da atribuição precisa ser array | 🟢 Implementado | `x[5] = 9` num escalar é recusado na análise semântica |
+| Tipos | Tamanho de elemento com fonte única | 🟢 Implementado | `tarm_symbol_table_data_size` é a única tabela; o Parser a alcança por `tarm_datatype_of` |
+| Array | Verificação de faixa em tempo de execução | 🔴 Ausente | com índice variável nada garante que ele caia dentro do array: ler devolve memória vizinha, escrever a corrompe |
+| Array | Índice como expressão (`v[i + 1]`) | 🟡 Recusado | só literal ou variável simples; falta o caminho geral |
+| Array | Inicializador menor que o declarado | 🟡 Aceito em silêncio | `int[3] v = {1}` deixa o resto com o que houvesse na stack |
 | Array | Como parâmetro, retorno ou variável global | ⚪ Não iniciado | — |
 | AST | Nós da árvore: união etiquetada por `ExprKind`, com o tipo resolvido em `type` e a posição de origem em cada nó | 🟢 Implementado | nomes e textos são fatias do buffer, como nos tokens; ver [`docs/architecture.md`](docs/architecture.md#a-ast-como-união-etiquetada) |
 | Tipos | `BaseType` (categoria) separado de `DataType` (categoria + forma de array) | 🟢 Implementado | evita duplicar cada tipo numa versão "array de"; quem só precisa da categoria lê `type` |
@@ -218,6 +227,8 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Codegen | Ponto flutuante | ⚪ Não iniciado | recusado com erro explícito: os valores viajam em registradores inteiros, e `float` exige a família `%xmm` |
 | Codegen | Mais de 6 argumentos ou parâmetros | ⚪ Não iniciado | recusado com erro explícito; falta a passagem pela stack |
 | Runtime | `print_*`, `atoi`, `strlen`, objetos com header, `mmap`/`brk`, `emit_note`, `_start` | 🟢 Implementada | ver [`docs/runtime.md`](docs/runtime.md) |
+| Runtime | Impressão de `int64` em toda a faixa | 🟢 Implementado | `_format_uint` divide em 64 bits; antes truncava a partir de 2³² |
+| Runtime | Impressão de número negativo | 🔴 Ausente | `_format_uint` trata o valor como sem sinal: `0 - 5` sai como `18446744073709551611` |
 | Runtime | `read_buf` e o tipo `buffer` | ⚪ Fora deste port | a rotina continua em `runtime/io.s`, sem quem a chame |
 | Driver | Pipeline completo, com barreira de diagnóstico entre etapas | 🟢 Implementado | todos os recursos são declarados antes do primeiro `goto`, então a limpeza nunca vê variável indeterminada |
 | Driver | Montagem e link com `as` + `ld`, sem `gcc` e sem shell | 🟢 Implementado | `posix_spawnp` + `waitpid` com código de saída conferido; `.o` temporários removidos mesmo em caso de falha |

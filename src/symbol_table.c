@@ -81,10 +81,9 @@ size_t tarm_symbol_table_data_size(BaseType type) {
         case Float:  return 4;
         case Bool:   return 1;
         case Int64:  return 8;
-        case String: return 16;
+        case String: return 8;
         case Void:   return 0;
     }
-    // Inalcançável para um BaseType válido; o `-Wswitch` avisa se um caso novo ficar de fora.
     return 0;
 }
 
