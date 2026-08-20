@@ -6,13 +6,10 @@
 // Montagem dos nós declarados em include/ast.h. Duas memórias convivem aqui: a `ExprList`, que é
 // um vetor comum de heap e existe só enquanto uma produção do Parser está aberta, e a arena, onde
 // os nós e os vetores definitivos ficam até o fim da compilação.
-//
-// NOTA: falta `#include <stdlib.h>` e `<string.h>` — `realloc`, `free` e `memcpy` entram por
-// declaração implícita, e a build avisa (`-Wimplicit-function-declaration`,
-// `-Wbuiltin-declaration-mismatch`). Ver a tabela de estado no README.
 #include "ast.h"
 #include <stdlib.h>
 #include <string.h>
+
 // Mesmo crescimento por dobra da `TokenList`, e pelo mesmo motivo: o total só se conhece no fim.
 // A capacidade inicial é maior (8) porque uma lista de nós costuma ser um corpo de função, não um
 // par de itens.

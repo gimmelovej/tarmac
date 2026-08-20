@@ -66,10 +66,6 @@ o corpo de uma função) dispensa o ponto e vírgula, e as demais o exigem. É p
 laço do bloco quanto o do nível superior conferem `previous(ps).kind != RBrace` antes de pedir o
 `;`.
 
-> **Ressalva desta versão:** a exigência só é de fato aplicada no nível superior, onde o `;` passa
-> por `expect`. Dentro de um bloco ele passa por `match`, então a ausência é aceita em silêncio:
-> `int x = 1 int y = 2` é reconhecido sem erro.
-
 ---
 
 ## Declarações de variável
@@ -186,9 +182,9 @@ A decodificação acontece em quem materializa o valor, e por isso em dois lugar
 
 ## Arrays (novo e em desenvolvimento)
 
-> 🚧 **Recurso novo.** Chegou na `0.2.0-alpha` e ainda é a parte mais instável da linguagem. Já dá
-> para declarar, inicializar, ler e **atribuir a um elemento**; o que **não** funciona está listado
-> no fim desta seção e no [`TODO.md`](../TODO.md).
+> 🚧 **Recurso novo.** Chegou na `0.2.0-alpha` e continua evoluindo. Declarar, inicializar, ler e
+> atribuir já funcionam, com índice literal **ou variável**; o que ainda falta está no fim desta
+> seção e no [`TODO.md`](../TODO.md).
 
 O tamanho vem **antes** do nome, colado ao tipo — `int[3] v`, e não `int v[3]` como em C:
 
@@ -196,6 +192,12 @@ O tamanho vem **antes** do nome, colado ao tipo — `int[3] v`, e não `int v[3]
 int[3] v = { 10, 20, 30 };
 print(v[0]);
 v[1] = 99;
+
+int i = 0;
+while i < 3 {
+    v[i] = v[i] * 2;    // índice variável, na leitura e na escrita
+    i = i + 1;
+}
 ```
 
 Ler a forma de uma vez só é o motivo da escolha. `parse_type` consome a palavra-chave e o `[N]`
@@ -224,20 +226,37 @@ O espaço é reservado nos dois lugares que precisam concordar: `count_slots` so
 bytes o array ocupa, dimensionando o `subq` do prólogo, e `tarm_symbol_table_declare` distribui os
 offsets com `size_of * array_len`.
 
+### Índice literal e índice variável
+
+Os dois caminhos existem, e a diferença está em **quando** o endereço é conhecido:
+
+- **literal** (`v[2]`) — o endereço é `slot + i * size_of`, resolvido na geração de código e emitido
+  como um deslocamento constante. A análise semântica confere a faixa aqui, porque é o único caso em
+  que o valor do índice se conhece antes de o programa rodar.
+- **variável** (`v[i]`) — entra o modo de endereçamento escalado do x86,
+  `offset(%rbp, %rcx, escala)`, que faz a multiplicação em tempo de execução sem instrução extra. A
+  escala é o `size_of` do elemento, e o processador só aceita 1, 2, 4 ou 8 — todos os tipos da
+  linguagem cabem nesse conjunto.
+
+Na **escrita** com índice variável há um cuidado a mais: o valor a gravar e o índice terminam ambos
+em `%rax`, então o valor é empilhado enquanto o índice é avaliado, e volta depois — o mesmo padrão
+que uma operação binária usa para não perder o lado esquerdo.
+
+O índice precisa ser do tipo `int`: um `int64` é recusado pela análise semântica, porque não há
+conversão implícita que estreite.
+
 ### O que ainda não funciona
 
-| Limitação | Onde | Efeito |
-|---|---|---|
-| **Atribuição não confere índice nem base** | análise semântica e Codegen, caso `ExprIndex` de `ExprAssign` | `v[i] = 5` com `i` variável **compila** e escreve num offset arbitrário (`744(%rbp)` num teste); `x[5] = 9` num escalar também passa |
-| **Índice variável na leitura** | `v[i]` com `i` variável | recusado — só índice literal é aceito |
-| **Sem verificação em tempo de execução** | — | um índice fora da faixa que escape da checagem estática lê ou escreve memória vizinha |
-| **Array como parâmetro, retorno ou global** | — | não reconhecido |
-| **`{}` vazio** | `parse_array_literal` confere `RParen` no lugar de `RBrace` | erro confuso: "token inesperado: '}'" |
-| **Menos elementos que o declarado** | — | `int[3] v = {1}` é aceito, e os dois últimos ficam com lixo da stack |
+| Limitação | Efeito |
+|---|---|
+| **Sem verificação de faixa em tempo de execução** | com índice variável nada garante que ele caia dentro do array: `v[i]` com `i = 9` num `int[2]` lê memória vizinha, e a escrita corrompe |
+| **Índice só literal ou variável simples** | `v[i + 1]` é recusado — falta o caminho geral, que avalia qualquer expressão para um registrador |
+| **Menos elementos que o declarado** | `int[3] v = {1}` é aceito, e os dois últimos ficam com o que houvesse na stack |
+| **Array como parâmetro, retorno ou global** | não reconhecido |
 
-A assimetria entre leitura e escrita é a pendência mais séria: o caminho de leitura confere que a
-base é um array, que o índice é literal e que ele cabe na faixa; o de escrita não confere nenhuma
-das três. Está no topo do [`TODO.md`](../TODO.md).
+A verificação de faixa em tempo de execução é a mais importante das quatro, e ficou mais urgente
+justamente por causa do índice variável: enquanto só havia índice literal, a checagem estática
+cobria todos os casos. Está no topo do [`TODO.md`](../TODO.md).
 
 ---
 
@@ -259,9 +278,6 @@ direção natural, e é o que faria o `Diagnostics` acumulado valer também aqui
 - **Sem menos unário.** `-5` não é reconhecido: `Minus` só existe como operador binário, então um
   literal negativo é erro de sintaxe.
 - **Sem `!=` e sem operadores lógicos** (`&&`, `||`) — não há token para eles no Lexer.
-- **Inicializador aceita instrução, não só expressão.** `parse_declaration` e
-  `parse_global_declaration` chamam `parse_statement` depois do `=`, então `int x = while ...` passa
-  pela sintaxe.
 - **Sem checagem de estouro em literal inteiro.** `parse_int_slice` acumula em `int64_t` e dá a
   volta em silêncio; a faixa do tipo declarado só é conhecida na análise semântica.
 - **`float` não chega ao fim.** O literal é reconhecido e o tipo existe, mas a geração de código

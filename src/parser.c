@@ -104,22 +104,6 @@ static BaseType datatype_from_token(TokenKind k) {
     }
 }
 
-// Tamanho de um elemento, em bytes. Duplica `tarm_symbol_table_data_size` de propósito: o Parser
-// precisa do valor para montar o `DataType` antes de a tabela de símbolos existir, e arrastar a
-// tabela até aqui só por isso acoplaria as duas etapas.
-static size_t size_of_base(BaseType b) {
-    switch (b) {
-        case Char:   return 1;
-        case Bool:   return 1;
-        case Int:    return 4;
-        case Int64:  return 8;
-        case Float:  return 8;
-        case String: return 8;   // ponteiro para o header
-        case Void:   return 0;
-    }
-    return 0;
-}
-
 // Sem verificação de estouro: `99999999999999999999` dá a volta em silêncio. Pendência para a
 // análise semântica, que é onde o intervalo do tipo declarado é conhecido.
 static int64_t parse_int_slice(const char *s, uint32_t len) {
@@ -141,8 +125,7 @@ static bool parse_type(Parser *ps, DataType *out){
 
     if(!match_type_kw(ps)) return false;
 
-    *out = (DataType){ .type = datatype_from_token(kw.kind), .array_len = 0 };
-    out->size_of = size_of_base(out->type);
+    *out = tarm_datatype_of(datatype_from_token(kw.kind));
     if(match(ps, LBracket)){
         if (!expect(ps, LiteralInteger, "o tamanho do array")) return false;
         out->is_array = true;
@@ -280,9 +263,6 @@ static bool parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count) {
         if (!e || !ast_list_push(&list, e)) { ast_list_free(&list); return false; }
 
         // Instrução terminada em '}' (if/while aninhado) dispensa o ';'.
-        //
-        // NOTA: aqui o ';' é apenas consumido se estiver lá (`match`), enquanto no nível superior
-        // ele é exigido (`expect`) — dentro de um bloco, a falta passa em silêncio.
         if (previous(ps).kind != RBrace)
             match(ps, Semicolon);
     }
@@ -386,13 +366,11 @@ static Expr *parse_statement(Parser *ps) {
 // seguido de `{` — um literal de array não é expressão de primeira classe, então não entra na
 // cadeia de precedência.
 //
-// NOTA: o teste de lista vazia confere `RParen` onde deveria conferir `RBrace`, então `{}` cai no
-// laço e produz um "token inesperado: '}'" em vez de um erro claro.
 static Expr *parse_array_literal(Parser *ps){
     if (!match(ps, LBrace)) return NULL;
     Token open = previous(ps);
     ExprList items = {0};
-    if(!check(ps, RParen)){
+    if(!check(ps, RBrace)){
         do {
             Expr *a = parse_expression(ps);
             if (!a || !ast_list_push(&items, a)){
@@ -585,10 +563,6 @@ static Expr *parse_postfix(Parser *ps) {
 }
 
 // Folhas da árvore: literais, identificador, chamada e o agrupamento por parênteses.
-//
-// NOTA: os ramos de `Literatoken inesplFloat`, `LiteralString`, `LiteralChar`, `KwTrue` e `KwFalse` são
-// inalcançáveis por enquanto — o Lexer ainda não emite esses tokens, e um número volta como
-// `Identifier`. Ver docs/parser.md#pendências-conhecidas.
 static Expr *parse_primary(Parser *ps) {
     Token t = peek(ps);
 

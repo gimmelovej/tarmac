@@ -25,7 +25,7 @@
 /// `gcc` e sem shell, como no Tarmac em C++.
 /// @note Entre uma etapa e a seguinte há sempre uma barreira sobre o `Diagnostics`: sem exceção
 /// para desviar o fluxo, é o Driver que decide onde a compilação para.
-/// @warning O executável ainda não sai correto de ponta a ponta — ver a tabela de estado no README.
+/// @note O que cada etapa já cobre — e o que ainda falta — está na tabela de estado do README.
 bool tarm_drive(int argc, char* argv[]);
 
 #endif

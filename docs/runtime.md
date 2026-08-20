@@ -106,7 +106,15 @@ segue essa disciplina.
   programa, como em C.
 - **`tarm_print_str` lê do header** (`OBJ_DATA`/`OBJ_LEN`), então imprime exatamente os bytes do
   objeto — sem depender de terminador nulo e sem varrer a string para achar o tamanho.
-- **`tarm_print_int` imprime apenas valores não-negativos**; o sinal ainda não é tratado.
+- **`tarm_print_int` imprime apenas valores não-negativos.** A formatação é feita por
+  `_format_uint`, que trata o valor como **sem sinal** de 64 bits: um número negativo sai como o
+  complemento de dois lido em decimal (`0 - 5` imprime `18446744073709551611`). Tratar o sinal é
+  testar o bit alto, emitir `'-'` e negar antes de formatar — está no [`TODO.md`](../TODO.md).
+- **`_format_uint` divide em 64 bits** (`divq`), então cobre toda a faixa de `int64`. A divisão em
+  32 bits que havia antes truncava qualquer valor a partir de 2³², e um `int64` grande saía como os
+  seus 32 bits baixos.
+- **`_format_uint_padded4` continua em 32 bits**, de propósito: ela só recebe a parte fracionária de
+  um `float` já escalada (0..9999), e `divq` é sensivelmente mais lento que `divl` no x86.
 - **`tarm_print_float`** formata a parte fracionária com 4 dígitos fixos (a parte é escalada por
   10000 e formatada com zeros à esquerda por `_format_uint_padded4`).
 - **`tarm_read_buf` lê no máximo 32 bytes** para um buffer temporário na stack antes de copiar para

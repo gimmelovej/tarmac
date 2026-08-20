@@ -84,7 +84,7 @@ tarm_open_file:
     pop %rbp
     ret
 # ------------------------------------------------------------------------------------------------
-# _format_uint (local) — Formata um uint32 em ASCII base 10, do fim do buffer para o início.
+# _format_uint (local) — Formata um uint64 em ASCII base 10, do fim do buffer para o início.
 #
 # In:       %rax = valor sem sinal, %rdi = fim (exclusivo) do buffer
 # Out:      %rsi = ponteiro pro primeiro dígito, %rcx = quantidade de dígitos
@@ -96,14 +96,14 @@ _format_uint:
     xorq    %rcx, %rcx
 .L_fmt_loop:
     xorl    %edx, %edx
-    movl    $10, %ebx
-    divl    %ebx
+    movq    $10, %rbx
+    divq    %rbx
     addl    $48, %edx
     decq    %rsi
     movb    %dl, (%rsi)
     incq    %rcx
-    cmpl    $0, %eax
-    jg      .L_fmt_loop
+    cmpq    $0, %rax
+    jne     .L_fmt_loop
     popq    %rbx
     ret
 

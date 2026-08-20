@@ -9,6 +9,64 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.2.2-alpha] - 2026-08-20
+
+**Índice variável** em arrays, na leitura e na escrita — o que torna array utilizável dentro de um
+laço, que era o principal buraco do recurso.
+
+```tarmac
+int i = 0;
+while i < 3 {
+    v[i] = v[i] * 2;
+    i = i + 1;
+}
+```
+
+> 🚧 O recurso continua **em desenvolvimento**. A contrapartida do índice variável é que a checagem
+> estática de faixa deixou de cobrir todos os casos: **não há verificação em tempo de execução**, e
+> um índice fora da faixa lê memória vizinha ou a corrompe. É o item 1 do [`TODO.md`](TODO.md).
+>
+> Fora dos arrays, fica registrado que **número negativo ainda não imprime**: `_format_uint` trata o
+> valor como sem sinal, então `0 - 5` sai como `18446744073709551611`.
+
+### Adicionado
+- **Índice variável** (`v[i]`), em leitura e escrita, pelo modo de endereçamento escalado do x86
+  (`offset(%rbp, %rcx, escala)`) — a multiplicação sai de graça na própria instrução, e a escala é o
+  `size_of` do elemento (o processador aceita 1, 2, 4 e 8, que cobrem todos os tipos da linguagem).
+  Na escrita, o valor a gravar é empilhado enquanto o índice é avaliado, porque os dois terminam em
+  `%rax`.
+- **A base de uma atribuição indexada precisa ser um array**: `x[5] = 9` num escalar passa a ser
+  recusado na análise semântica. Sem esse teste, virava uma escrita 20 bytes além do slot.
+
+### Corrigido
+- **Uma fonte única para o tamanho de um elemento.** `size_of_base` (parser.c) e
+  `tarm_symbol_table_data_size` davam valores diferentes para `Float` e `String`, e como a reserva do
+  frame saía de uma e os offsets da outra, o espaço não fechava: **três variáveis `string` numa
+  função já bastavam** — a terceira caía 16 bytes fora do frame e o valor se perdia (`xxyyzz` saía
+  como `xxyy`). `size_of_base` foi removida e o Parser passa a usar `tarm_datatype_of`, que resolve
+  o tamanho pela tabela de símbolos; `String` foi corrigida para 8 (o slot guarda um ponteiro para
+  o objeto, não o objeto).
+- **`int64` acima de 2³² deixou de truncar na impressão.** `_format_uint` (runtime/io.s) dividia em
+  32 bits (`divl`), então qualquer valor a partir de 4294967296 saía como os seus 32 bits baixos —
+  `5000000000` virava `705032704`. Passa a dividir em 64 bits (`divq`), com o teste de fim do laço
+  também alargado: em 32 bits, um quociente com os bits baixos zerados encerraria o laço cedo.
+  `_format_uint_padded4` continua em 32 bits de propósito, porque só recebe a parte fracionária de
+  um `float` já escalada (0..9999) e `divq` é bem mais lento.
+- O tamanho do elemento na leitura indexada vinha do tipo do **nó** e passa a vir do símbolo, que é
+  quem de fato conhece a declaração.
+
+### Documentação
+- Seção de arrays reescrita no README e em `docs/parser.md`, com a subseção nova sobre índice
+  literal versus variável e o que cada caminho garante.
+- `docs/runtime.md` ganhou o porquê da divisão em 64 bits, de `_format_uint_padded4` continuar em
+  32, e o registro de que número negativo sai como complemento de dois.
+- Saíram da documentação registros de pendências que eram troca de uma palavra, e não decisão de
+  projeto; ficaram só as que exigem implementação de verdade.
+- Comentários defasados removidos: a nota de includes faltantes em `ast.c` (resolvida há duas
+  versões), a de `parse_primary` sobre tokens que o Lexer já emite, e o aviso de `driver.h` de que o
+  executável não saía correto.
+- `example.tm` passa a cobrir índice variável dentro de um `while`.
+
 ## [0.2.1-alpha] - 2026-08-19
 
 Correções do suporte a array que entrou na `0.2.0-alpha`, mais a **atribuição a elemento**. Os dois
