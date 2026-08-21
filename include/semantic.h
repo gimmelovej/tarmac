@@ -44,8 +44,8 @@ typedef struct {
 /// @brief Prepara a análise, ligando o analisador aos recursos da compilação.
 /// @param functions Tabela já preenchida com as nativas; a análise acrescenta as funções do
 /// usuário numa passagem prévia, antes de validar qualquer corpo.
-void tarm_semantic_init(SemanticAnalyzer *an, Diagnostics *diag, Arena *arena,
-                        SymbolTable *symbols, FunctionTable *functions);
+void tarm_semantic_init(SemanticAnalyzer *an, Diagnostics *diag, Arena *arena, SymbolTable *symbols,
+                        FunctionTable *functions);
 
 /// @brief Valida, em ordem, cada instrução do programa.
 /// @param program Vetor de instruções de nível superior, como devolvido por `tarm_parser_program`.

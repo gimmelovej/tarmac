@@ -26,6 +26,6 @@
 /// @note Entre uma etapa e a seguinte há sempre uma barreira sobre o `Diagnostics`: sem exceção
 /// para desviar o fluxo, é o Driver que decide onde a compilação para.
 /// @note O que cada etapa já cobre — e o que ainda falta — está na tabela de estado do README.
-bool tarm_drive(int argc, char* argv[]);
+bool tarm_drive(int argc, char *argv[]);
 
 #endif

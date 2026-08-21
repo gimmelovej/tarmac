@@ -38,12 +38,7 @@ extern char **environ;
 // Arquivos de runtime montados e linkados junto com o programa. Cada um vira um `.o` temporário
 // próprio; ver `load_runtime_assembly`.
 static const char *RUNTIME_SOURCES[] = {
-    "object.s",
-    "alloc.s",
-    "audio.s",
-    "io.s",
-    "string.s",
-    "takeoff.s",
+    "object.s", "alloc.s", "audio.s", "io.s", "string.s", "takeoff.s",
 };
 #define RUNTIME_SOURCE_COUNT (sizeof RUNTIME_SOURCES / sizeof *RUNTIME_SOURCES)
 
@@ -75,7 +70,7 @@ static bool run_or_fail(Diagnostics *diag, char *const argv[]) {
     // O sufixo 'p' de spawnp = procura o executável no PATH. Os dois NULL são file actions
     // (redirecionar descritores) e atributos; sem eles, o filho herda stdin/stdout/stderr.
     int rc = posix_spawnp(&pid, argv[0], NULL, NULL, argv, environ);
-    if (rc != 0) {   // devolve o código de erro direto, NÃO usa errno
+    if (rc != 0) { // devolve o código de erro direto, NÃO usa errno
         tarm_error(diag, "falha ao iniciar '%s': %s", argv[0], strerror(rc));
         return false;
     }
@@ -84,7 +79,7 @@ static bool run_or_fail(Diagnostics *diag, char *const argv[]) {
     // zumbi (o kernel guarda o status até alguém recolhê-lo).
     int status = 0;
     while (waitpid(pid, &status, 0) == -1) {
-        if (errno != EINTR) {   // aqui SIM é errno; um sinal só interrompeu a espera
+        if (errno != EINTR) { // aqui SIM é errno; um sinal só interrompeu a espera
             tarm_error(diag, "waitpid falhou para '%s'", argv[0]);
             return false;
         }
@@ -116,9 +111,9 @@ static bool run_or_fail(Diagnostics *diag, char *const argv[]) {
 // Como no Tarmac em C++, procura o último '.' do caminho inteiro — um diretório com ponto no nome
 // (`./v1.2/programa`) confunde a divisão. Pendência conhecida.
 static char *replace_extension(const char *path, const char *new_ext) {
-    const char *dot = strrchr(path, '.');
-    size_t base_len = dot ? (size_t)(dot - path) : strlen(path);
-    size_t ext_len  = strlen(new_ext);
+    const char *dot      = strrchr(path, '.');
+    size_t      base_len = dot ? (size_t)(dot - path) : strlen(path);
+    size_t      ext_len  = strlen(new_ext);
 
     char *out = malloc(base_len + ext_len + 1);
     if (!out) return NULL;
@@ -173,8 +168,7 @@ static void temp_objects_cleanup(TempObjects *tmp) {
 // compartilhadas entre arquivos que são montados isoladamente. `--gc-sections` descarta seções não
 // referenciadas, mantendo só as rotinas efetivamente usadas.
 static bool load_runtime_assembly(Diagnostics *diag, const char *runtime_dir,
-                                  const char *program_obj, const char *target,
-                                  TempObjects *tmp) {
+                                  const char *program_obj, const char *target, TempObjects *tmp) {
     char  *link_argv[MAX_LINK_ARGS];
     size_t link_n = 0;
 
@@ -200,7 +194,7 @@ static bool load_runtime_assembly(Diagnostics *diag, const char *runtime_dir,
 
         // mkstempS (com S) preserva o sufixo: os 2 últimos caracteres, ".o", ficam intactos.
         static const char template[] = "/tmp/tarm-XXXXXX.o";
-        char *obj_path = malloc(sizeof template);
+        char *obj_path               = malloc(sizeof template);
         if (!obj_path) {
             tarm_system_error("não foi possível alocar o caminho do objeto temporário");
             free(src_path);
@@ -215,16 +209,21 @@ static bool load_runtime_assembly(Diagnostics *diag, const char *runtime_dir,
             free(src_path);
             return false;
         }
-        close(fd);   // o `as` reabre o caminho; aqui só interessava reservar o nome
+        close(fd); // o `as` reabre o caminho; aqui só interessava reservar o nome
 
         // Registrado antes da montagem: se o `as` falhar, a limpeza ainda remove o arquivo.
         tmp->paths[tmp->count++] = obj_path;
 
-        char *as_argv[] = {
-            "as", "-I", (char *)runtime_dir, "--fatal-warnings", "--noexecstack",
-            src_path, "-o", obj_path, NULL
-        };
-        bool assembled = run_or_fail(diag, as_argv);
+        char *as_argv[] = {"as",
+                           "-I",
+                           (char *)runtime_dir,
+                           "--fatal-warnings",
+                           "--noexecstack",
+                           src_path,
+                           "-o",
+                           obj_path,
+                           NULL};
+        bool  assembled = run_or_fail(diag, as_argv);
         free(src_path);
         if (!assembled) return false;
 
@@ -258,16 +257,16 @@ bool tarm_drive(int argc, char *argv[]) {
     TokenList     toks     = {0};
     TempObjects   tmp_objs = {{0}, 0};
 
-    char   *source    = NULL;
-    char   *asm_path  = NULL;
-    char   *obj_path  = NULL;
-    char   *exe_path  = NULL;
-    FILE   *out       = NULL;
-    Expr  **program   = NULL;
-    size_t  program_n = 0;
-    size_t  len       = 0;
-    bool    generated = false;
-    bool    ok        = false;
+    char  *source    = NULL;
+    char  *asm_path  = NULL;
+    char  *obj_path  = NULL;
+    char  *exe_path  = NULL;
+    FILE  *out       = NULL;
+    Expr **program   = NULL;
+    size_t program_n = 0;
+    size_t len       = 0;
+    bool   generated = false;
+    bool   ok        = false;
 
     tarm_diag_init(&diag);
     tarm_symbol_table_init(&symbols);
@@ -288,20 +287,18 @@ bool tarm_drive(int argc, char *argv[]) {
     tarm_file_init(&fl, &diag);
 
     source = tarm_read_entire_file(&fl, argv[1], &len);
-    if (!source) goto cleanup;   // o erro já foi registrado pela leitura
+    if (!source) goto cleanup; // o erro já foi registrado pela leitura
 
     // --- análise léxica ----------------------------------------------------------------------
     Lexer lx;
     tarm_lexer_init(&lx, source, len, &diag);
 
-    if (!tarm_lexer_tokenize(&lx, &toks))
-        goto cleanup;
+    if (!tarm_lexer_tokenize(&lx, &toks)) goto cleanup;
 
     // Barreira: a varredura pode ter chegado ao fim com tokens `Invalid` pelo caminho, e não faz
     // sentido pedir uma árvore de uma sequência que já se sabe errada. É aqui que o "acumular em
     // vez de lançar" volta a virar decisão de fluxo.
-    if (tarm_diag_has_errors(&diag))
-        goto cleanup;
+    if (tarm_diag_has_errors(&diag)) goto cleanup;
 
     // Um `EndOfFile` logo no primeiro token significa entrada só com espaços e comentários. Sem
     // esta recusa, o pipeline seguiria até produzir um objeto sem símbolo nenhum, e o erro só
@@ -318,24 +315,19 @@ bool tarm_drive(int argc, char *argv[]) {
     Parser ps;
     tarm_parser_init(&ps, &toks, &diag, &arena);
 
-    if (!tarm_parser_program(&ps, &program, &program_n))
-        goto cleanup;
+    if (!tarm_parser_program(&ps, &program, &program_n)) goto cleanup;
 
-    if (tarm_diag_has_errors(&diag))
-        goto cleanup;
+    if (tarm_diag_has_errors(&diag)) goto cleanup;
 
     // --- análise semântica -------------------------------------------------------------------
-    if (!tarm_function_table_register_natives(&functions))
-        goto cleanup;
+    if (!tarm_function_table_register_natives(&functions)) goto cleanup;
 
     SemanticAnalyzer an;
     tarm_semantic_init(&an, &diag, &arena, &symbols, &functions);
 
-    if (!tarm_semantic_analyse(&an, program, program_n))
-        goto cleanup;
+    if (!tarm_semantic_analyse(&an, program, program_n)) goto cleanup;
 
-    if (tarm_diag_has_errors(&diag))
-        goto cleanup;
+    if (tarm_diag_has_errors(&diag)) goto cleanup;
 
     // --- geração de código -------------------------------------------------------------------
     //
@@ -349,7 +341,7 @@ bool tarm_drive(int argc, char *argv[]) {
         goto cleanup;
     }
 
-    obj_path = malloc(strlen(exe_path) + 3);   // ".o" + '\0'
+    obj_path = malloc(strlen(exe_path) + 3); // ".o" + '\0'
     if (!obj_path) {
         tarm_system_error("não foi possível montar o caminho do objeto");
         goto cleanup;
@@ -384,7 +376,7 @@ bool tarm_drive(int argc, char *argv[]) {
     // O `&&` do shell vira sequência normal: se o `as` falhar, `run_or_fail` devolve false e o
     // `ld` nunca é alcançado.
     {
-        char *as_argv[] = { "as", asm_path, "-o", obj_path, NULL };
+        char *as_argv[] = {"as", asm_path, "-o", obj_path, NULL};
         if (!run_or_fail(&diag, as_argv)) goto cleanup;
     }
 
@@ -403,9 +395,9 @@ cleanup:
     // rodado: todas partem de um estado inicializado no topo da função.
     if (out) fclose(out);
 
-    temp_objects_cleanup(&tmp_objs);   // remove os `.o` da runtime, inclusive em caso de falha
+    temp_objects_cleanup(&tmp_objs); // remove os `.o` da runtime, inclusive em caso de falha
 
-    arena_free(&arena);                // derruba a AST inteira
+    arena_free(&arena); // derruba a AST inteira
     tarm_function_table_free(&functions);
     tarm_symbol_table_free(&symbols);
     tarm_lexer_tokens_free(&toks);
@@ -417,8 +409,7 @@ cleanup:
 
     // O resumo sai do `Diagnostics` e não do caminho percorrido: erros acumulados em qualquer
     // etapa chegam aqui, mesmo que a etapa tenha seguido em frente depois deles.
-    if (diag.error_count > 0)
-        fprintf(stderr, "%u erro(s) encontrado(s).\n", diag.error_count);
+    if (diag.error_count > 0) fprintf(stderr, "%u erro(s) encontrado(s).\n", diag.error_count);
 
     return ok;
 }

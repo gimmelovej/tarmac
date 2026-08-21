@@ -21,9 +21,9 @@
 /// @details Sem isto, um `%s` recebendo um `int` só apareceria como lixo na saída (ou um
 /// *segfault*) em tempo de execução; com a checagem, vira aviso de compilação.
 #if defined(__GNUC__)
-  #define TARM_PRINTF(f, a) __attribute__((format(printf, f, a)))
+#define TARM_PRINTF(f, a) __attribute__((format(printf, f, a)))
 #else
-  #define TARM_PRINTF(f, a)
+#define TARM_PRINTF(f, a)
 #endif
 
 /// @brief Estado de diagnóstico compartilhado por todas as etapas do pipeline.
@@ -32,7 +32,7 @@
 /// Driver no fim da compilação.
 typedef struct {
     uint32_t error_count;
-    uint32_t max_errors;   // 0 = sem limite
+    uint32_t max_errors; // 0 = sem limite
 } Diagnostics;
 
 /// @brief Zera a contagem e aplica o limite padrão de erros relatados.
@@ -48,8 +48,8 @@ bool tarm_diag_has_errors(const Diagnostics *d);
 /// @param col Coluna do início do lexema/token que causou o erro (1-based).
 /// @param fmt Mensagem no formato de `printf`, sem quebra de linha final.
 /// @note Emitida em *stderr* como `erro <linha>:<coluna>: <mensagem>`.
-void tarm_error_at(Diagnostics *d, uint32_t line, uint32_t col,
-                   const char *fmt, ...) TARM_PRINTF(4, 5);
+void tarm_error_at(Diagnostics *d, uint32_t line, uint32_t col, const char *fmt, ...)
+    TARM_PRINTF(4, 5);
 
 /// @brief Erro do usuário sem posição (ex.: argumento de linha de comando).
 /// @param fmt Mensagem no formato de `printf`, sem quebra de linha final.

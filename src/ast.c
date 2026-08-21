@@ -21,7 +21,7 @@ bool ast_list_push(ExprList *l, Expr *e) {
         size_t cap = l->capacity ? l->capacity * 2 : 8;
         Expr **buf = realloc(l->data, cap * sizeof *buf);
         if (!buf) return false;
-        l->data = buf;
+        l->data     = buf;
         l->capacity = cap;
     }
     l->data[l->count++] = e;
@@ -31,7 +31,7 @@ bool ast_list_push(ExprList *l, Expr *e) {
 // Libera só o vetor: os nós apontados são da arena e morrem com ela.
 void ast_list_free(ExprList *l) {
     free(l->data);
-    l->data = NULL;
+    l->data  = NULL;
     l->count = l->capacity = 0;
 }
 
@@ -39,7 +39,7 @@ void ast_list_free(ExprList *l) {
 // dos nós, e o heap é devolvido na mesma chamada — assim nenhuma produção precisa lembrar de
 // liberar a lista no caminho de sucesso.
 Expr **ast_list_commit(Arena *a, ExprList *l, size_t *out_count) {
-    *out_count = l->count;
+    *out_count   = l->count;
     Expr **items = NULL;
     if (l->count) {
         items = arena_alloc(a, l->count * sizeof *items);
@@ -55,7 +55,7 @@ Expr *ast_expr_new(Arena *a, ExprKind kind, uint32_t line, uint32_t col) {
     Expr *e = arena_alloc(a, sizeof *e);
     if (!e) return NULL;
     e->kind = kind;
-    e->type = (DataType){ .type = Void, .size_of = 0, .is_array = false, .array_len = 0 };
+    e->type = (DataType){.type = Void, .size_of = 0, .is_array = false, .array_len = 0};
     e->line = line;
     e->col  = col;
     return e;

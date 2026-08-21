@@ -22,9 +22,9 @@
 // alocação: um `malloc` por bloco, e não um para o cabeçalho e outro para os bytes.
 struct ArenaBlock {
     ArenaBlock *next;
-    size_t used;
-    size_t capacity;
-    char data[];
+    size_t      used;
+    size_t      capacity;
+    char        data[];
 };
 
 // Não aloca nada: o primeiro bloco só nasce no primeiro `arena_alloc`, então uma arena que nunca
@@ -59,8 +59,8 @@ void *arena_alloc(Arena *a, size_t size) {
     size = (size + (ARENA_ALIGN - 1)) & ~(size_t)(ARENA_ALIGN - 1);
 
     if (!a->head || a->head->used + size > a->head->capacity) {
-        size_t cap = (size > ARENA_BLOCK_SIZE) ? size : ARENA_BLOCK_SIZE;
-        ArenaBlock *b = new_block(cap);
+        size_t      cap = (size > ARENA_BLOCK_SIZE) ? size : ARENA_BLOCK_SIZE;
+        ArenaBlock *b   = new_block(cap);
         if (!b) return NULL;
         b->next = a->head;
         a->head = b;

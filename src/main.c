@@ -12,8 +12,7 @@
 #include <stdlib.h>
 #include "driver.h"
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     bool ok = tarm_drive(argc, argv);
 
     if (ok)

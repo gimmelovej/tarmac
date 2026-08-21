@@ -26,7 +26,7 @@ static Expr *parse_multiplicative(Parser *ps);
 static Expr *parse_unary(Parser *ps);
 static Expr *parse_postfix(Parser *ps);
 static Expr *parse_primary(Parser *ps);
-static bool parse_type(Parser *ps, DataType *out);
+static bool  parse_type(Parser *ps, DataType *out);
 
 static Expr *make_binary(Parser *ps, BinaryOp op, Expr *left, Expr *right, Token t);
 
@@ -46,7 +46,7 @@ void tarm_parser_init(Parser *ps, const TokenList *toks, Diagnostics *diag, Aren
 static Token peek(const Parser *ps) {
     if (ps->pos >= ps->tokens.count) {
         Token eof = {0};
-        eof.kind = EndOfFile;
+        eof.kind  = EndOfFile;
         return eof;
     }
     return ps->tokens.data[ps->pos];
@@ -58,7 +58,10 @@ static bool isAtEnd(const Parser *ps) {
 
 // Só é válido depois de ao menos um `advance`; o token zerado é rede contra bug de produção.
 static Token previous(const Parser *ps) {
-    if (ps->pos == 0) { Token none = {0}; return none; }
+    if (ps->pos == 0) {
+        Token none = {0};
+        return none;
+    }
     return ps->tokens.data[ps->pos - 1];
 }
 
@@ -78,7 +81,10 @@ static bool match(Parser *ps, TokenKind kind) {
 }
 
 static bool expect(Parser *ps, TokenKind kind, const char *what) {
-    if (check(ps, kind)) { advance(ps); return true; }
+    if (check(ps, kind)) {
+        advance(ps);
+        return true;
+    }
     Token t = peek(ps);
     tarm_error_at(ps->diag, t.line, t.col, "esperado %s", what);
     return false;
@@ -92,15 +98,15 @@ static bool expect(Parser *ps, TokenKind kind, const char *what) {
 // ...). Quando nada casa, `op` fica intocado — `parse_assignment` o inicializa com `OpNone`, e é
 // esse sentinela que depois distingue o `=` simples de um composto.
 static bool match_compound(Parser *ps, BinaryOp *op) {
-    return match(ps, PlusEqual)  ? (*op = OpAdd, true)
-         : match(ps, MinusEqual) ? (*op = OpSub, true)
-         : match(ps, StarEqual)  ? (*op = OpMul, true)
-         : match(ps, SlashEqual)  ? (*op = OpDiv, true)
-         : false;
+    return match(ps, PlusEqual)    ? (*op = OpAdd, true)
+           : match(ps, MinusEqual) ? (*op = OpSub, true)
+           : match(ps, StarEqual)  ? (*op = OpMul, true)
+           : match(ps, SlashEqual) ? (*op = OpDiv, true)
+                                   : false;
 }
 static bool match_type_kw(Parser *ps) {
-    return match(ps, KwInt)  || match(ps, KwInt64) || match(ps, KwFloat)
-        || match(ps, KwChar) || match(ps, KwString) || match(ps, KwBool);
+    return match(ps, KwInt) || match(ps, KwInt64) || match(ps, KwFloat) || match(ps, KwChar) ||
+           match(ps, KwString) || match(ps, KwBool);
 }
 
 
@@ -132,13 +138,13 @@ static int64_t parse_int_slice(const char *s, uint32_t len) {
 // forma do valor.
 //
 // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
-static bool parse_type(Parser *ps, DataType *out){
-    Token    kw = peek(ps);
+static bool parse_type(Parser *ps, DataType *out) {
+    Token kw = peek(ps);
 
-    if(!match_type_kw(ps)) return false;
+    if (!match_type_kw(ps)) return false;
 
     *out = tarm_datatype_of(datatype_from_token(kw.kind));
-    if(match(ps, LBracket)){
+    if (match(ps, LBracket)) {
         if (!expect(ps, LiteralInteger, "o tamanho do array")) return false;
 
         // O literal do tamanho é lido depois do `expect`, que é quem o consome: é `previous`
@@ -193,8 +199,7 @@ static bool parse_arg_list(Parser *ps, ExprList *args) {
 // seguido de `function`), ou é variável global.
 static Expr *parse_top_level(Parser *ps) {
     if (match_type_kw(ps)) {
-        if (check(ps, KwFunction))
-            return parse_function_declaration(ps);
+        if (check(ps, KwFunction)) return parse_function_declaration(ps);
         return parse_global_declaration(ps);
     }
 
@@ -211,7 +216,7 @@ static Expr *parse_function_declaration(Parser *ps) {
     Token    type_tok = previous(ps);
     DataType ret_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
 
-    advance(ps);   // consome KwFunction
+    advance(ps); // consome KwFunction
 
     if (!expect(ps, Identifier, "o nome da função após 'function'")) return NULL;
     Token name = previous(ps);
@@ -222,22 +227,29 @@ static Expr *parse_function_declaration(Parser *ps) {
     if (!check(ps, RParen)) {
         do {
             Expr *p = parse_declaration(ps);
-            if (!p || !ast_list_push(&params, p)) { ast_list_free(&params); return NULL; }
+            if (!p || !ast_list_push(&params, p)) {
+                ast_list_free(&params);
+                return NULL;
+            }
         } while (match(ps, Comma));
     }
-    if (!expect(ps, RParen, "')' após os parâmetros")) { ast_list_free(&params); return NULL; }
+    if (!expect(ps, RParen, "')' após os parâmetros")) {
+        ast_list_free(&params);
+        return NULL;
+    }
 
     Expr *e = ast_expr_new(ps->arena, ExprFuncDecl, type_tok.line, type_tok.col);
-    if (!e) { ast_list_free(&params); return NULL; }
+    if (!e) {
+        ast_list_free(&params);
+        return NULL;
+    }
 
     e->as.func_decl.name     = name.start;
     e->as.func_decl.name_len = name.len;
     e->as.func_decl.ret_type = ret_type;
-    e->as.func_decl.params   = ast_list_commit(ps->arena, &params,
-                                               &e->as.func_decl.param_count);
+    e->as.func_decl.params   = ast_list_commit(ps->arena, &params, &e->as.func_decl.param_count);
 
-    if (!parse_body_block(ps, &e->as.func_decl.body, &e->as.func_decl.body_count))
-        return NULL;
+    if (!parse_body_block(ps, &e->as.func_decl.body, &e->as.func_decl.body_count)) return NULL;
 
     return e;
 }
@@ -278,11 +290,13 @@ static bool parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count) {
         if (match(ps, Semicolon)) continue;
 
         Expr *e = parse_declaration(ps);
-        if (!e || !ast_list_push(&list, e)) { ast_list_free(&list); return false; }
+        if (!e || !ast_list_push(&list, e)) {
+            ast_list_free(&list);
+            return false;
+        }
 
         // Instrução terminada em '}' (if/while aninhado) dispensa o ';'.
-        if (previous(ps).kind != RBrace)
-            match(ps, Semicolon);
+        if (previous(ps).kind != RBrace) match(ps, Semicolon);
     }
 
     if (!expect(ps, RBrace, "'}' para fechar um bloco")) {
@@ -298,15 +312,15 @@ static bool parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count) {
 static Expr *parse_declaration(Parser *ps) {
 
     DataType var_type;
-    Token type_tok = peek(ps);
-    if(!parse_type(ps, &var_type)) return parse_statement(ps);
+    Token    type_tok = peek(ps);
+    if (!parse_type(ps, &var_type)) return parse_statement(ps);
 
     Expr *identifier_expr = parse_primary(ps);
     if (!identifier_expr) return NULL;
 
     Expr *init = NULL;
     if (match(ps, Equal)) {
-        init = check(ps, LBrace) ? parse_array_literal(ps) : parse_expression(ps);        
+        init = check(ps, LBrace) ? parse_array_literal(ps) : parse_expression(ps);
         if (!init) return NULL;
     }
 
@@ -338,13 +352,11 @@ static Expr *parse_statement(Parser *ps) {
         e->as.conditional.else_body  = NULL;
         e->as.conditional.else_count = 0;
 
-        if (!parse_body_block(ps, &e->as.conditional.then_body,
-                                  &e->as.conditional.then_count))
+        if (!parse_body_block(ps, &e->as.conditional.then_body, &e->as.conditional.then_count))
             return NULL;
 
         if (match(ps, KwElse)) {
-            if (!parse_body_block(ps, &e->as.conditional.else_body,
-                                      &e->as.conditional.else_count))
+            if (!parse_body_block(ps, &e->as.conditional.else_body, &e->as.conditional.else_count))
                 return NULL;
         }
         return e;
@@ -358,8 +370,7 @@ static Expr *parse_statement(Parser *ps) {
         if (!e) return NULL;
         e->as.while_loop.cond = cond;
 
-        if (!parse_body_block(ps, &e->as.while_loop.body,
-                                  &e->as.while_loop.body_count))
+        if (!parse_body_block(ps, &e->as.while_loop.body, &e->as.while_loop.body_count))
             return NULL;
         return e;
     }
@@ -384,25 +395,31 @@ static Expr *parse_statement(Parser *ps) {
 // seguido de `{` — um literal de array não é expressão de primeira classe, então não entra na
 // cadeia de precedência.
 //
-static Expr *parse_array_literal(Parser *ps){
+static Expr *parse_array_literal(Parser *ps) {
     if (!match(ps, LBrace)) return NULL;
-    Token open = previous(ps);
+    Token    open  = previous(ps);
     ExprList items = {0};
-    if(!check(ps, RBrace)){
+    if (!check(ps, RBrace)) {
         do {
             Expr *a = parse_expression(ps);
-            if (!a || !ast_list_push(&items, a)){
-                ast_list_free(&items); return NULL;;
+            if (!a || !ast_list_push(&items, a)) {
+                ast_list_free(&items);
+                return NULL;
+                ;
             }
         } while (match(ps, Comma));
     }
-    
+
     if (!expect(ps, RBrace, "'}' ao fechar o inicializador")) {
-        ast_list_free(&items); return NULL;
+        ast_list_free(&items);
+        return NULL;
     }
 
     Expr *e = ast_expr_new(ps->arena, ExprArrayLit, open.line, open.col);
-    if (!e) { ast_list_free(&items); return NULL; }
+    if (!e) {
+        ast_list_free(&items);
+        return NULL;
+    }
     e->as.array_lit.elements = ast_list_commit(ps->arena, &items, &e->as.array_lit.count);
     return e;
 }
@@ -428,18 +445,18 @@ static Expr *parse_assignment(Parser *ps) {
     if (match(ps, Equal) || match_compound(ps, &op)) {
         if (left->kind != ExprIdentifier && left->kind != ExprIndex) {
             tarm_error_at(ps->diag, left->line, left->col,
-                        "alvo de atribuição inesperado "
-                        "(esperava um identificador à esquerda de '=')");
+                          "alvo de atribuição inesperado "
+                          "(esperava um identificador à esquerda de '=')");
             return NULL;
         }
-        Token   t = previous(ps);
-        Expr    *right = parse_assignment(ps);
+        Token t     = previous(ps);
+        Expr *right = parse_assignment(ps);
         if (!right) return NULL;
 
         bool compound = (op != OpNone);
-        if(compound) right =  make_binary(ps, op, left, right, t);
+        if (compound) right = make_binary(ps, op, left, right, t);
 
-        Expr    *a = ast_expr_new(ps->arena, ExprAssign, left->line, left->col);
+        Expr *a = ast_expr_new(ps->arena, ExprAssign, left->line, left->col);
         if (!a) return NULL;
 
         a->as.assign.target = left;
@@ -453,7 +470,7 @@ static Expr *parse_assignment(Parser *ps) {
 // Fabrica o nó binário e reaproveita `left` como acumulador — é o que dá associatividade à
 // esquerda a toda a cadeia abaixo.
 static Expr *make_binary(Parser *ps, BinaryOp op, Expr *left, Expr *right, Token t) {
-    Expr    *e = ast_expr_new(ps->arena, ExprBinary, t.line, t.col);
+    Expr *e = ast_expr_new(ps->arena, ExprBinary, t.line, t.col);
     if (!e) return NULL;
     e->as.binary.op    = op;
     e->as.binary.left  = left;
@@ -466,7 +483,7 @@ static Expr *parse_equality(Parser *ps) {
     if (!left) return NULL;
 
     while (check(ps, EqualEqual)) {
-        Token t = advance(ps);
+        Token t     = advance(ps);
         Expr *right = parse_relational(ps);
         if (!right) return NULL;
         left = make_binary(ps, OpEq, left, right, t);
@@ -483,11 +500,16 @@ static Expr *parse_relational(Parser *ps) {
         BinaryOp op;
         Token    t = peek(ps);
 
-        if      (check(ps, Greater))      op = OpGt;
-        else if (check(ps, GreaterEqual)) op = OpGtEq;
-        else if (check(ps, Less))      op = OpLt;
-        else if (check(ps, LessEqual)) op = OpLtEq;
-        else break;
+        if (check(ps, Greater))
+            op = OpGt;
+        else if (check(ps, GreaterEqual))
+            op = OpGtEq;
+        else if (check(ps, Less))
+            op = OpLt;
+        else if (check(ps, LessEqual))
+            op = OpLtEq;
+        else
+            break;
 
         advance(ps);
         Expr *right = parse_additive(ps);
@@ -506,11 +528,12 @@ static Expr *parse_additive(Parser *ps) {
         BinaryOp op;
         Token    t = peek(ps);
 
-        if      (check(ps, Plus))  {
+        if (check(ps, Plus)) {
             op = OpAdd;
-        }
-        else if (check(ps, Minus)) op = OpSub;
-        else break;
+        } else if (check(ps, Minus))
+            op = OpSub;
+        else
+            break;
 
         advance(ps);
         Expr *right = parse_multiplicative(ps);
@@ -529,9 +552,12 @@ static Expr *parse_multiplicative(Parser *ps) {
         BinaryOp op;
         Token    t = peek(ps);
 
-        if      (check(ps, Star))  op = OpMul;
-        else if (check(ps, Slash)) op = OpDiv;
-        else break;
+        if (check(ps, Star))
+            op = OpMul;
+        else if (check(ps, Slash))
+            op = OpDiv;
+        else
+            break;
 
         advance(ps);
         Expr *right = parse_unary(ps);
@@ -557,17 +583,17 @@ static Expr *parse_multiplicative(Parser *ps) {
 //
 // @note Um nó dedicado (`ExprUnary`) está previsto — ver o TODO.md. Enquanto o açúcar serve, a
 // árvore que chega à análise semântica não tem nenhuma construção nova para tratar.
-static Expr *parse_unary(Parser *ps){
+static Expr *parse_unary(Parser *ps) {
     Token t = peek(ps);
 
-    if(match(ps,Minus)){
+    if (match(ps, Minus)) {
         Expr *operand = parse_unary(ps);
-        if(!operand) return NULL;
+        if (!operand) return NULL;
 
-        if(operand->kind == ExprInteger){
+        if (operand->kind == ExprInteger) {
             operand->as.integer.value = -operand->as.integer.value;
-            operand->line = t.line;
-            operand->col  = t.col;
+            operand->line             = t.line;
+            operand->col              = t.col;
             return operand;
         }
 
@@ -588,24 +614,23 @@ static Expr *parse_unary(Parser *ps){
 static Expr *parse_postfix(Parser *ps) {
     Expr *receiver = parse_primary(ps);
     if (!receiver) return NULL;
-    if(check(ps, LBracket)){
-        while (match(ps, LBracket))
-        {
+    if (check(ps, LBracket)) {
+        while (match(ps, LBracket)) {
             Token open = previous(ps);
 
-            Expr *index  = parse_expression(ps);
-            if(!index) return NULL;
+            Expr *index = parse_expression(ps);
+            if (!index) return NULL;
 
             if (!expect(ps, RBracket, "']' ao fechar uma indexação")) return NULL;
-            
+
             Expr *e = ast_expr_new(ps->arena, ExprIndex, open.line, open.col);
             if (!e) return NULL;
 
-            e->as.index.base = receiver;
+            e->as.index.base  = receiver;
             e->as.index.index = index;
-            receiver = e;
-        }   
-    } else if(check(ps, Dot)){
+            receiver          = e;
+        }
+    } else if (check(ps, Dot)) {
         while (match(ps, Dot)) {
             if (!expect(ps, Identifier, "o nome do método após '.'")) return NULL;
             Token name = previous(ps);
@@ -613,16 +638,25 @@ static Expr *parse_postfix(Parser *ps) {
             if (!expect(ps, LParen, "'(' ao abrir um método")) return NULL;
 
             ExprList args = {0};
-            if (!ast_list_push(&args, receiver)) { ast_list_free(&args); return NULL; }
-            if (!parse_arg_list(ps, &args))      { ast_list_free(&args); return NULL; }
+            if (!ast_list_push(&args, receiver)) {
+                ast_list_free(&args);
+                return NULL;
+            }
+            if (!parse_arg_list(ps, &args)) {
+                ast_list_free(&args);
+                return NULL;
+            }
 
             Expr *e = ast_expr_new(ps->arena, ExprMethod, name.line, name.col);
-            if (!e) { ast_list_free(&args); return NULL; }
+            if (!e) {
+                ast_list_free(&args);
+                return NULL;
+            }
 
             e->as.call.name     = name.start;
             e->as.call.name_len = name.len;
             e->as.call.args     = ast_list_commit(ps->arena, &args, &e->as.call.arg_count);
-            receiver = e;
+            receiver            = e;
         }
     }
     return receiver;
@@ -636,10 +670,16 @@ static Expr *parse_primary(Parser *ps) {
         // Identificador seguido de '(' é chamada de função; caso contrário, referência.
         if (match(ps, LParen)) {
             ExprList args = {0};
-            if (!parse_arg_list(ps, &args)) { ast_list_free(&args); return NULL; }
+            if (!parse_arg_list(ps, &args)) {
+                ast_list_free(&args);
+                return NULL;
+            }
 
             Expr *e = ast_expr_new(ps->arena, ExprCall, t.line, t.col);
-            if (!e) { ast_list_free(&args); return NULL; }
+            if (!e) {
+                ast_list_free(&args);
+                return NULL;
+            }
 
             e->as.call.name     = t.start;
             e->as.call.name_len = t.len;
@@ -702,8 +742,7 @@ static Expr *parse_primary(Parser *ps) {
         return inner;
     }
 
-    tarm_error_at(ps->diag, t.line, t.col,
-                  "token inesperado: '%.*s'", (int)t.len, t.start);
+    tarm_error_at(ps->diag, t.line, t.col, "token inesperado: '%.*s'", (int)t.len, t.start);
     return NULL;
 }
 
@@ -720,7 +759,10 @@ bool tarm_parser_program(Parser *ps, Expr ***out_items, size_t *out_count) {
         if (match(ps, Semicolon)) continue;
 
         Expr *e = parse_top_level(ps);
-        if (!e) { ast_list_free(&program); return false; }
+        if (!e) {
+            ast_list_free(&program);
+            return false;
+        }
 
         // Instrução terminada em '}' (corpo de função) dispensa o ';'.
         if (previous(ps).kind != RBrace) {
@@ -732,7 +774,10 @@ bool tarm_parser_program(Parser *ps, Expr ***out_items, size_t *out_count) {
             match(ps, Semicolon);
         }
 
-        if (!ast_list_push(&program, e)) { ast_list_free(&program); return false; }
+        if (!ast_list_push(&program, e)) {
+            ast_list_free(&program);
+            return false;
+        }
     }
 
     *out_items = ast_list_commit(ps->arena, &program, out_count);

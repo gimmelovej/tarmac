@@ -34,7 +34,7 @@
 /// apenas os argumentos explícitos — o receptor entra como `args[0]` no nó `ExprMethod`, mas não
 /// conta em `param_count`.
 typedef struct {
-    const char *name;      ///< Fatia do buffer de origem (nativas apontam para literais estáticos).
+    const char *name; ///< Fatia do buffer de origem (nativas apontam para literais estáticos).
     uint32_t    name_len;
     BaseType    ret_type;
     BaseType    params[TARM_MAX_PARAMS];
@@ -42,14 +42,14 @@ typedef struct {
     /// Conjunto de tipos aceitos em cada posição, como máscara de `TARM_TYPE_BIT`. Zero significa
     /// "só o tipo exato de `params[i]`"; é o caso de toda função do usuário. Uma nativa como
     /// `print` aceita várias, e é aqui que essa lista mora.
-    uint32_t    accepted[TARM_MAX_PARAMS];
-    size_t      param_count;
+    uint32_t accepted[TARM_MAX_PARAMS];
+    size_t   param_count;
 
-    bool        is_native;   ///< Implementada pelo runtime, não pelo usuário.
-    bool        is_variadic; ///< Aceita qualquer aridade (ex.: `print`); todo argumento é conferido
-                             ///< contra `accepted[0]`.
-    bool        is_method;   ///< Chamada com `.`; ver `receiver`.
-    BaseType    receiver;    ///< Tipo do receptor (só relevante quando `is_method`).
+    bool is_native;     ///< Implementada pelo runtime, não pelo usuário.
+    bool is_variadic;   ///< Aceita qualquer aridade (ex.: `print`); todo argumento é conferido
+                        ///< contra `accepted[0]`.
+    bool     is_method; ///< Chamada com `.`; ver `receiver`.
+    BaseType receiver;  ///< Tipo do receptor (só relevante quando `is_method`).
 
     /// Rótulo do runtime a chamar. Vazio para função do usuário (o rótulo sai do nome, com
     /// *mangling*) e para nativa com despacho por tipo (ver `dispatch_param`).
@@ -57,7 +57,7 @@ typedef struct {
 
     /// Índice do argumento cujo tipo escolhe o rótulo, ou -1 quando não há despacho. É o mecanismo
     /// de `print`: um nome na linguagem, cinco rotinas diferentes no runtime.
-    int         dispatch_param;
+    int dispatch_param;
 
     /// Rótulo por tipo do argumento de despacho, indexado por `BaseType`. NULL onde o tipo não é
     /// suportado — o que não deve acontecer, porque `accepted` já barra esses casos na semântica.
@@ -96,20 +96,18 @@ bool tarm_function_table_declare(FunctionTable *ft, const char *name, uint32_t n
 /// @return Ponteiro para a assinatura, ou `NULL` se não existir.
 /// @warning Invalidado por qualquer `declare` posterior, que pode realocar o vetor. Use antes da
 /// próxima declaração, ou copie a struct.
-const FunctionSignature *tarm_function_table_find(const FunctionTable *ft,
-                                                  const char *name, uint32_t name_len);
+const FunctionSignature *tarm_function_table_find(const FunctionTable *ft, const char *name,
+                                                  uint32_t name_len);
 
 /// @brief Busca um método pelo nome **e** pelo tipo do receptor.
 /// @details Métodos de mesmo nome podem existir para receptores diferentes, então o nome sozinho
 /// não identifica a assinatura.
 /// @return Ponteiro para a assinatura, ou `NULL` se não houver método com esse nome para o tipo.
-const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft,
-                                                         const char *name, uint32_t name_len,
-                                                         BaseType receiver);
+const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft, const char *name,
+                                                         uint32_t name_len, BaseType receiver);
 
 /// @brief Indica se já existe uma função com o nome dado.
-bool tarm_function_table_exists(const FunctionTable *ft,
-                                const char *name, uint32_t name_len);
+bool tarm_function_table_exists(const FunctionTable *ft, const char *name, uint32_t name_len);
 
 /// @brief Confere a aridade de uma chamada contra a assinatura.
 /// @param arg_count Argumentos explícitos (sem o receptor, no caso de método).

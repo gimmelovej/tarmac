@@ -28,9 +28,9 @@
 /// emprestados pelo Driver, que os cria e destrói em volta da análise.
 typedef struct {
     TokenList    tokens;
-    size_t       pos;    ///< Índice do próximo token a consumir.
+    size_t       pos; ///< Índice do próximo token a consumir.
     Diagnostics *diag;
-    Arena       *arena;  ///< Onde os nós da AST são alocados (ver ast.h).
+    Arena       *arena; ///< Onde os nós da AST são alocados (ver ast.h).
 } Parser;
 
 
