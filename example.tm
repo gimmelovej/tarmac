@@ -2,9 +2,9 @@
 // example.tm — Passeio pelos recursos da linguagem Tarmac reconhecidos pelo compilador em C.
 // Compile e execute com: ./build/tarm example.tm && ./example
 //
-// Destaques desta versão: MENOS UNÁRIO e a impressão de números negativos, além dos ARRAYS (novo,
-// em desenvolvimento) — ver os blocos no fim de main() e as limitações conhecidas em
-// docs/parser.md#arrays-novo-e-em-desenvolvimento.
+// Destaques desta versão: ATRIBUIÇÕES COMPOSTAS (+=, -=, *=, /=), além do MENOS UNÁRIO e dos
+// ARRAYS (novo, em desenvolvimento) — ver os blocos no fim de main() e as limitações conhecidas
+// em docs/parser.md#arrays-novo-e-em-desenvolvimento.
 // ================================================================================================
 
 // Variáveis globais: ficam fora de qualquer função e pedem um literal constante, porque viram dado
@@ -149,6 +149,23 @@ int function main()
     print(-contagem);
     print(" ");
     print(-contagem * 2);
+    print("\n");
+
+    // --- ATRIBUIÇÕES COMPOSTAS ------------------------------------------------------------------
+    //
+    // `a += b` é açúcar, desfeito no Parser em `a = a + b`: as regras de tipo, a coerção e o
+    // código gerado são os da forma estendida. Funciona em variável e em elemento de array, e o
+    // lado direito agrupa inteiro antes do operador: `acum *= 2 + 3` é `acum = acum * (2 + 3)`.
+    print("compostas: ");
+    int acum = 10;
+    acum += 5;      // 15
+    acum -= 3;      // 12
+    acum *= 2 + 3;  // 60
+    acum /= 4;      // 15
+    print(acum);
+    print(" ");
+    medidas[0] += 100;
+    print(medidas[0]);
     print("\n");
 
     // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio

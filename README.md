@@ -21,6 +21,10 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
 > `if`/`else`, `while`, strings, chamadas nativas e alocação.
 >
+> ➕ **Atribuições compostas.** `+=`, `-=`, `*=` e `/=` já funcionam, em variável e em elemento de
+> array — como açúcar, desfeito no Parser: `a += b` compila exatamente como `a = a + b`, com as
+> mesmas regras de tipo e coerção.
+>
 > ➖ **Menos unário e números negativos.** `-x` já é reconhecido (como açúcar: o literal é dobrado
 > no nó, e `-x` vira `0 - x`), e a runtime passou a imprimir negativo — `print(0 - 5)` sai `-5`, e
 > não mais o complemento de dois em decimal.
@@ -204,7 +208,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
 | Parser | Menos unário (`-x`) | 🟢 Implementado | como açúcar: o literal é dobrado no próprio nó, e `-x` vira `0 - x`; um `ExprUnary` dedicado está previsto |
 | Parser | `!=` e operadores lógicos (`&&`, `||`) | ⚪ Não iniciado | não há token para eles no Lexer |
-| Parser | Atribuições compostas (`+=`, `-=`, ...) | ⚪ Próxima implementação | — |
+| Parser | Atribuições compostas (`+=`, `-=`, `*=`, `/=`) | 🟢 Implementado | como açúcar: `a += b` é desfeito no Parser em `a = a + b`, então semântica e codegen veem uma atribuição comum — ver [`docs/parser.md`](docs/parser.md#atribuições-compostas-como-açúcar) |
 | Array | Declaração com tamanho fixo (`int[3] v`), inicializador `{ ... }`, leitura e atribuição | 🟡 **Novo, em desenvolvimento** | ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
 | Array | Índice variável, em leitura e escrita | 🟢 Implementado | endereçamento escalado do x86 (`offset(%rbp, %rcx, escala)`), sem instrução de multiplicação — é o que torna array utilizável dentro de um `while` |
 | Array | Acesso na largura do elemento | 🟢 Implementado | `mov_suffix`/`reg_a` na escrita e `mov_load` (com extensão de sinal) na leitura: `int[3]` ocupa 12 bytes, `char[4]` ocupa 4 |
@@ -240,7 +244,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Driver | Montagem e link com `as` + `ld`, sem `gcc` e sem shell | 🟢 Implementado | `posix_spawnp` + `waitpid` com código de saída conferido; `.o` temporários removidos mesmo em caso de falha |
 | Driver | Limpeza dos intermediários | 🟢 Implementado | os `.o` (do programa e da runtime) saem ao fim; o `.s` fica, para quem quiser ler o código gerado |
 | Driver | Código de saída do processo | 🟢 Implementado | `EXIT_SUCCESS`/`EXIT_FAILURE`, para que `tarm x.tm && ./x` funcione |
-| Exemplo | `example.tm` | 🟢 Compila e roda | passeio por globais, funções, coerção, método `len()`, `if`/`else`, `while`, `atoi` e alocação |
+| Exemplo | `example.tm` | 🟢 Compila e roda | passeio por globais, funções, coerção, método `len()`, `if`/`else`, `while`, `atoi`, alocação, arrays, menos unário e atribuições compostas |
 
 Legenda: 🟢 implementado e verificado · 🟡 em desenvolvimento/parcial · 🔴 bug conhecido · ⚪ não iniciado.
 

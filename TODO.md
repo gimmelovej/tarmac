@@ -39,7 +39,6 @@ leitura e escrita. O que resta, na ordem em que faz sentido atacar:
 |---|---|---|
 | 🟢 | **Ponto flutuante na geração de código** | o tipo e o literal existem; falta a família `%xmm` no gerador. É a maior ausência em relação ao [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) |
 | 🟢 | **Nó dedicado para o unário** (`ExprUnary`) | hoje `-x` é açúcar, desfeito no Parser em `0 - x`; um nó próprio abre caminho para `!` e `~`, e evita que a semântica veja um `OpSub` que o usuário não escreveu |
-| 🟢 | **Atribuições compostas** (`+=`, `-=`, `*=`, `/=`) | **próxima implementação** |
 | 🟢 | **`!=` e operadores lógicos** (`&&`, `||`) | não há token para eles no Lexer |
 | 🟢 | **Recuperação de erro no Parser** | descartar tokens até o próximo `;` ou `}` e retomar, para relatar mais de um erro de sintaxe por rodada |
 | 🟢 | **Mais de 6 argumentos ou parâmetros** | passagem pela stack, além dos registradores da ABI |

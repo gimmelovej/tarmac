@@ -117,7 +117,7 @@ só agrupa o que sobra, então a árvore já sai com o agrupamento certo.
 
 | Nível | Produção | Operadores | Associatividade |
 |---|---|---|---|
-| 1 | `parse_assignment` | `=` | à direita |
+| 1 | `parse_assignment` | `=` `+=` `-=` `*=` `/=` | à direita |
 | 2 | `parse_equality` | `==` | à esquerda |
 | 3 | `parse_relational` | `>` `>=` `<` `<=` | à esquerda |
 | 4 | `parse_additive` | `+` `-` | à esquerda |
@@ -157,6 +157,43 @@ multiplicação na precedência — ele fica entre `parse_multiplicative` e `par
 > Um nó dedicado (`ExprUnary`) está previsto. Enquanto o açúcar serve, a análise semântica e a
 > geração de código não precisam conhecer construção nenhuma nova: o que chega a elas é um `OpSub`
 > comum. Ver o [`TODO.md`](../TODO.md).
+
+### Atribuições compostas, como açúcar
+
+`+=`, `-=`, `*=` e `/=` também **não têm nó próprio**: `parse_assignment` desfaz cada um na forma
+estendida ainda no Parser.
+
+```tarmac
+a += 5;       // vira `a = a + 5`
+v[i] *= 2;    // vira `v[i] = v[i] * 2` — elemento de array também é alvo válido
+```
+
+O Lexer entrega cada operador como um token só (`PlusEqual`, `MinusEqual`, `StarEqual`,
+`SlashEqual`), pelo mesmo *lookahead* de um caractere que `==`, `>=` e `<=` já usavam. No Parser,
+`match_compound` traduz o token na operação binária correspondente e a devolve por parâmetro;
+`OpNone` — o membro de `BinaryOp` que nenhuma expressão produz — é o sentinela que distingue "era
+um `=` simples" de "era um composto" sem uma segunda variável de controle. Ele nunca chega a um nó:
+existe só dentro de `parse_assignment`, e é por isso que a análise semântica e a geração de código
+não têm um caso para ele.
+
+A vantagem é a mesma do menos unário: nenhuma fase posterior conhece construção nova. O que chega
+adiante é um `ExprAssign` cujo valor é um `ExprBinary` comum, então as regras de tipo, a coerção
+implícita e o código emitido são exatamente os de `a = a + 5` escrito por extenso. O alvo passa
+pela mesma validação do `=` (precisa ser `ExprIdentifier` ou `ExprIndex`), e a precedência não
+muda: o lado direito é lido inteiro pela própria `parse_assignment`, e o composto é aplicado por
+fora — `x *= 2 + 3` agrupa como `x = x * (2 + 3)`.
+
+Duas consequências do dessugaramento que valem registro:
+
+- **O alvo aparece duas vezes na árvore.** O mesmo nó `left` vira o alvo do `ExprAssign` **e** o
+  filho esquerdo do `ExprBinary`. Num erro que envolve o alvo, os dois caminhos são validados e o
+  diagnóstico sai dobrado: `y += 1` com `y` não declarado relata "atribuição a variável não
+  declarada" e "variável não declarada", ambos para o mesmo `y`.
+- **O alvo é avaliado duas vezes na execução** — uma como destino da escrita, outra como operando
+  da leitura. Hoje isso não tem efeito observável, porque as formas de alvo aceitas (variável e
+  índice literal ou variável simples) não têm efeito colateral. No dia em que o índice aceitar uma
+  expressão qualquer (`v[f()] += 1`, com `f` mexendo em estado), a dobra passa a ser comportamento
+  visível e esta decisão terá de ser revista.
 
 ---
 
@@ -298,8 +335,6 @@ direção natural, e é o que faria o `Diagnostics` acumulado valer também aqui
 
 ## Pendências conhecidas
 
-- **Sem menos unário.** `-5` não é reconhecido: `Minus` só existe como operador binário, então um
-  literal negativo é erro de sintaxe.
 - **Sem `!=` e sem operadores lógicos** (`&&`, `||`) — não há token para eles no Lexer.
 - **Sem checagem de estouro em literal inteiro.** `parse_int_slice` acumula em `int64_t` e dá a
   volta em silêncio; a faixa do tipo declarado só é conhecida na análise semântica.

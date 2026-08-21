@@ -50,9 +50,13 @@ typedef enum
     // Pontuação e operadores
     Comma,
     Plus,
+    PlusEqual,  ///< `+=` — os compostos não têm nó próprio: o Parser os desfaz em `a = a + b`
     Minus,
+    MinusEqual, ///< `-=`
     Star,
+    StarEqual,  ///< `*=`
     Slash,
+    SlashEqual, ///< `/=`
     Equal,
     EqualEqual,
     LParen,
