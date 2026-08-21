@@ -21,6 +21,10 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
 > `if`/`else`, `while`, strings, chamadas nativas e alocação.
 >
+> ➖ **Menos unário e números negativos.** `-x` já é reconhecido (como açúcar: o literal é dobrado
+> no nó, e `-x` vira `0 - x`), e a runtime passou a imprimir negativo — `print(0 - 5)` sai `-5`, e
+> não mais o complemento de dois em decimal.
+>
 > 🚧 **Arrays (novo, em desenvolvimento).** Declarar, inicializar, ler e atribuir já funcionam, com
 > índice **literal ou variável** — o que torna array utilizável dentro de um `while`. O que falta
 > para fechar o recurso está em [Arrays](#arrays-novo-e-em-desenvolvimento) e no
@@ -198,7 +202,9 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Parser | Gramática completa: nível superior, funções, globais, blocos, `if`/`else`, `while`, `return`, precedência de expressão, chamadas e métodos | 🟢 Implementado | ver [`docs/parser.md`](docs/parser.md) para a gramática produção a produção |
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
-| Parser | Menos unário, `!=`, `&&`/`||` | ⚪ Não iniciado | `-5` é erro de sintaxe; não há token para os operadores lógicos |
+| Parser | Menos unário (`-x`) | 🟢 Implementado | como açúcar: o literal é dobrado no próprio nó, e `-x` vira `0 - x`; um `ExprUnary` dedicado está previsto |
+| Parser | `!=` e operadores lógicos (`&&`, `||`) | ⚪ Não iniciado | não há token para eles no Lexer |
+| Parser | Atribuições compostas (`+=`, `-=`, ...) | ⚪ Próxima implementação | — |
 | Array | Declaração com tamanho fixo (`int[3] v`), inicializador `{ ... }`, leitura e atribuição | 🟡 **Novo, em desenvolvimento** | ver [Arrays](#arrays-novo-e-em-desenvolvimento) |
 | Array | Índice variável, em leitura e escrita | 🟢 Implementado | endereçamento escalado do x86 (`offset(%rbp, %rcx, escala)`), sem instrução de multiplicação — é o que torna array utilizável dentro de um `while` |
 | Array | Acesso na largura do elemento | 🟢 Implementado | `mov_suffix`/`reg_a` na escrita e `mov_load` (com extensão de sinal) na leitura: `int[3]` ocupa 12 bytes, `char[4]` ocupa 4 |
@@ -228,7 +234,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Codegen | Mais de 6 argumentos ou parâmetros | ⚪ Não iniciado | recusado com erro explícito; falta a passagem pela stack |
 | Runtime | `print_*`, `atoi`, `strlen`, objetos com header, `mmap`/`brk`, `emit_note`, `_start` | 🟢 Implementada | ver [`docs/runtime.md`](docs/runtime.md) |
 | Runtime | Impressão de `int64` em toda a faixa | 🟢 Implementado | `_format_uint` divide em 64 bits; antes truncava a partir de 2³² |
-| Runtime | Impressão de número negativo | 🔴 Ausente | `_format_uint` trata o valor como sem sinal: `0 - 5` sai como `18446744073709551611` |
+| Runtime | Impressão de número negativo | 🟢 Implementado | `_format_int` guarda o sinal, formata o módulo com `_format_uint` e escreve o `-` na frente; `INT64_MIN` inclusive |
 | Runtime | `read_buf` e o tipo `buffer` | ⚪ Fora deste port | a rotina continua em `runtime/io.s`, sem quem a chame |
 | Driver | Pipeline completo, com barreira de diagnóstico entre etapas | 🟢 Implementado | todos os recursos são declarados antes do primeiro `goto`, então a limpeza nunca vê variável indeterminada |
 | Driver | Montagem e link com `as` + `ld`, sem `gcc` e sem shell | 🟢 Implementado | `posix_spawnp` + `waitpid` com código de saída conferido; `.o` temporários removidos mesmo em caso de falha |

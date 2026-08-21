@@ -2,8 +2,9 @@
 // example.tm — Passeio pelos recursos da linguagem Tarmac reconhecidos pelo compilador em C.
 // Compile e execute com: ./build/tarm example.tm && ./example
 //
-// Destaque desta versão: ARRAYS (novo, em desenvolvimento) — ver o bloco no fim de main() e as
-// limitações conhecidas em docs/parser.md#arrays-novo-e-em-desenvolvimento.
+// Destaques desta versão: MENOS UNÁRIO e a impressão de números negativos, além dos ARRAYS (novo,
+// em desenvolvimento) — ver os blocos no fim de main() e as limitações conhecidas em
+// docs/parser.md#arrays-novo-e-em-desenvolvimento.
 // ================================================================================================
 
 // Variáveis globais: ficam fora de qualquer função e pedem um literal constante, porque viram dado
@@ -134,6 +135,21 @@ int function main()
 
     // Com índice literal a faixa é conferida em tempo de compilação (`medidas[3]` seria recusado).
     // Com índice variável ainda não há verificação em tempo de execução — ver o TODO.md.
+
+    // --- MENOS UNÁRIO ---------------------------------------------------------------------------
+    //
+    // `-x` é açúcar: num literal, o sinal é dobrado no próprio nó; numa variável, vira `0 - x`.
+    // Ele fica acima da multiplicação na precedência, então `-contagem * 2` agrupa como
+    // `(-contagem) * 2`. A runtime imprime o sinal — antes, um negativo saía como o complemento de
+    // dois lido em decimal.
+    print("unario: ");
+    int negativo = -7;
+    print(negativo);
+    print(" ");
+    print(-contagem);
+    print(" ");
+    print(-contagem * 2);
+    print("\n");
 
     // Heap linear via `brk`: a liberação é LIFO, então `brk_free(a)` devolve também o que veio
     // depois de `a`. O `mmap` mapeia regiões independentes, liberadas por ponteiro e tamanho.

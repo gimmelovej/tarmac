@@ -29,7 +29,6 @@ leitura e escrita. O que resta, na ordem em que faz sentido atacar:
 
 | Marca | Item | Onde |
 |---|---|---|
-| 🔴 | **Número negativo não imprime.** `_format_uint` trata o valor como sem sinal, então `0 - 5` sai como `18446744073709551611` — o complemento de dois lido em decimal. Testar o bit alto, emitir `'-'` e negar antes de formatar. | `runtime/io.s`, `tarm_print_int` |
 | 🟡 | **`ast_list_commit` não distingue** lista vazia de falha de alocação: devolve NULL nos dois casos, com `*out_count` já preenchido. | `ast.c` |
 | 🟡 | **Alinhamento da arena**: o tamanho é arredondado para 16, mas o cabeçalho de 24 bytes desloca `data`, então os ponteiros saem alinhados a 8. | `arena.c` |
 | 🟡 | **Estouro em literal inteiro**: `parse_int_slice` acumula em `int64_t` e dá a volta em silêncio. | `parser.c` |
@@ -39,7 +38,8 @@ leitura e escrita. O que resta, na ordem em que faz sentido atacar:
 | Marca | Item | Nota |
 |---|---|---|
 | 🟢 | **Ponto flutuante na geração de código** | o tipo e o literal existem; falta a família `%xmm` no gerador. É a maior ausência em relação ao [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) |
-| 🟢 | **Menos unário** (`-5`) | hoje `Minus` só existe como operador binário, e um literal negativo é erro de sintaxe |
+| 🟢 | **Nó dedicado para o unário** (`ExprUnary`) | hoje `-x` é açúcar, desfeito no Parser em `0 - x`; um nó próprio abre caminho para `!` e `~`, e evita que a semântica veja um `OpSub` que o usuário não escreveu |
+| 🟢 | **Atribuições compostas** (`+=`, `-=`, `*=`, `/=`) | **próxima implementação** |
 | 🟢 | **`!=` e operadores lógicos** (`&&`, `||`) | não há token para eles no Lexer |
 | 🟢 | **Recuperação de erro no Parser** | descartar tokens até o próximo `;` ou `}` e retomar, para relatar mais de um erro de sintaxe por rodada |
 | 🟢 | **Mais de 6 argumentos ou parâmetros** | passagem pela stack, além dos registradores da ABI |

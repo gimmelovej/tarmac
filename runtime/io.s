@@ -83,6 +83,40 @@ tarm_open_file:
     movq    %rbp, %rsp
     pop %rbp
     ret
+
+# ------------------------------------------------------------------------------------------------
+# _format_int (local) — Formata um int64 COM SINAL em ASCII base 10, do fim do buffer para o início.
+#
+# Guarda o sinal em %r8, formata o valor absoluto com _format_uint e, se era negativo, recua um byte
+# e escreve o '-' na frente dos dígitos. Escrever da direita para a esquerda é o que torna isso
+# barato: o sinal entra por último, sem deslocar nada.
+#
+# %r8 sobrevive à chamada porque _format_uint não o toca (ver a lista de clobbers dela).
+#
+# INT64_MIN cai de pé por acidente feliz: `negq` sobre ele devolve ele mesmo, e _format_uint, que lê
+# sem sinal, imprime 9223372036854775808 — exatamente o módulo que se quer.
+#
+# In:       %rax = valor com sinal, %rdi = fim (exclusivo) do buffer
+# Out:      %rsi = ponteiro pro primeiro dígito (ou pro '-'), %rcx = quantidade de bytes
+# Clobbers: %rax, %rdx, %rsi, %rcx, %r8 (%rbx salvo/restaurado por _format_uint)
+# ------------------------------------------------------------------------------------------------
+_format_int:
+    xorl    %r8d, %r8d
+    testq   %rax, %rax
+    jns     .L_int_abs
+    movl    $1, %r8d
+    negq    %rax
+.L_int_abs:
+    call    _format_uint        # %rsi = 1º dígito, %rcx = nº de dígitos
+
+    testl   %r8d, %r8d
+    jz      .L_int_done
+    decq    %rsi
+    movb    $45, (%rsi)
+    incq    %rcx
+.L_int_done:
+    ret
+
 # ------------------------------------------------------------------------------------------------
 # _format_uint (local) — Formata um uint64 em ASCII base 10, do fim do buffer para o início.
 #
@@ -146,7 +180,7 @@ tarm_print_int:
 
     movq    %rdi, %rax
     leaq    (%rbp), %rdi          # fim do buffer local (32 bytes reservados abaixo)
-    call    _format_uint
+    call    _format_int
 
     movq    $1, %rax
     movq    $1, %rdi

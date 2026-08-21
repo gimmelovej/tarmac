@@ -9,6 +9,44 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.3.0-alpha] - 2026-08-21
+
+**Menos unário** na linguagem e **impressão com sinal** na runtime — as duas metades do mesmo
+recurso: até aqui não havia como escrever um número negativo nem como vê-lo.
+
+```tarmac
+int negativo = -7;
+print(negativo);        // -7
+print(-contagem * 2);   // o unário fica acima da multiplicação
+```
+
+### Adicionado
+- **Menos unário**, como **açúcar sintático**: não há nó próprio. Num literal, o sinal é dobrado no
+  próprio `ExprInteger`; numa expressão, `-x` vira `0 - x` (um `ExprBinary` com `OpSub`). Dobrar o
+  literal não é só economia de um nó — sem isso, `-9223372036854775808` teria de passar pelo
+  positivo correspondente, que não cabe em `int64_t`.
+- A produção `parse_unary` entra entre `parse_multiplicative` e `parse_postfix`, então o unário tem
+  precedência **maior** que a multiplicação (`-a * b` agrupa como `(-a) * b`) e é recursiva, o que
+  faz `-(-x)` funcionar.
+- **`_format_int`** no runtime: guarda o sinal, formata o módulo com `_format_uint` e, se era
+  negativo, recua um byte e escreve o `'-'` na frente. Escrever da direita para a esquerda é o que
+  torna isso barato — o sinal entra por último, sem deslocar nada. `INT64_MIN` cai de pé por
+  acidente feliz: `negq` sobre ele devolve ele mesmo, e a leitura sem sinal dá o módulo certo.
+
+### Corrigido
+- **`array_len` vinha do token errado.** A captura do literal de tamanho havia subido para o topo de
+  `parse_type`, antes de `match_type_kw`, e passou a ler o token **anterior ao próprio tipo**: um
+  `int[3]` precedido de `{` virava um array de 75 elementos (`'{' - '0'`), reservando 336 bytes de
+  frame e deixando a checagem de faixa inútil — `v[50]` compilava. O literal volta a ser lido depois
+  do `expect` que o consome.
+
+### Documentação
+- `docs/parser.md` ganhou a subseção "Menos unário, como açúcar", com a tabela de precedência
+  atualizada; `docs/runtime.md`, o funcionamento de `_format_int`.
+- O nó dedicado (`ExprUnary`) e as **atribuições compostas** — a próxima implementação — entraram no
+  [`TODO.md`](TODO.md).
+- `example.tm` cobre o unário, inclusive a interação com a precedência da multiplicação.
+
 ## [0.2.2-alpha] - 2026-08-20
 
 **Índice variável** em arrays, na leitura e na escrita — o que torna array utilizável dentro de um
