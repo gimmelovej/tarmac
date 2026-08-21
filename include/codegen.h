@@ -34,13 +34,13 @@
 typedef struct {
     FILE          *out;
     Diagnostics   *diag;
-    FunctionTable *functions;     ///< Emprestada pelo Driver; é dela que sai o rótulo de cada chamada.
+    FunctionTable *functions; ///< Emprestada pelo Driver; é dela que sai o rótulo de cada chamada.
 
-    SymbolTable    symbols;       ///< Própria; ver nota acima.
-    size_t         label_counter; ///< Gera `.L<n>` únicos para desvios.
-    size_t         string_counter;///< Gera os `strobj_<n>`/`strbytes_<n>` dos literais em `.rodata`.
-    size_t         return_label;  ///< Rótulo do epílogo da função corrente.
-    int            stack_depth;   ///< Pushes pendentes; ver `call_align` em codegen.c.
+    SymbolTable symbols;        ///< Própria; ver nota acima.
+    size_t      label_counter;  ///< Gera `.L<n>` únicos para desvios.
+    size_t      string_counter; ///< Gera os `strobj_<n>`/`strbytes_<n>` dos literais em `.rodata`.
+    size_t      return_label;   ///< Rótulo do epílogo da função corrente.
+    int         stack_depth;    ///< Pushes pendentes; ver `call_align` em codegen.c.
 } Codegen;
 
 /// @brief Prepara o gerador para escrever em `out`.

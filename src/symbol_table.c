@@ -23,22 +23,21 @@ static bool slice_eq(const char *a, uint32_t a_len, const char *b, uint32_t b_le
 // o custo de manter uma; se um dia o perfil acusar, é aqui que entra o índice.
 static Symbol *find_mut(SymbolTable *st, const char *name, uint32_t name_len) {
     for (size_t i = 0; i < st->count; i++)
-        if (slice_eq(st->data[i].name, st->data[i].name_len, name, name_len))
-            return &st->data[i];
+        if (slice_eq(st->data[i].name, st->data[i].name_len, name, name_len)) return &st->data[i];
     return NULL;
 }
 
 // Cresce por dobra de capacidade, como a TokenList. Devolve o slot novo, já contabilizado.
 static Symbol *entry_push(SymbolTable *st) {
     if (st->count == st->capacity) {
-        size_t new_capacity = (st->capacity == 0) ? 8 : st->capacity * 2;
-        Symbol *buffer = realloc(st->data, new_capacity * sizeof *st->data);
+        size_t  new_capacity = (st->capacity == 0) ? 8 : st->capacity * 2;
+        Symbol *buffer       = realloc(st->data, new_capacity * sizeof *st->data);
 
         if (buffer == NULL) {
             tarm_system_error("Não foi possível realocar a tabela de símbolos");
             return NULL;
         }
-        st->data = buffer;
+        st->data     = buffer;
         st->capacity = new_capacity;
     }
     return &st->data[st->count++];
@@ -87,33 +86,27 @@ size_t tarm_symbol_table_data_size(BaseType type) {
     return 0;
 }
 
-const Symbol *tarm_symbol_table_find(const SymbolTable *st,
-                                     const char *name, uint32_t name_len) {
+const Symbol *tarm_symbol_table_find(const SymbolTable *st, const char *name, uint32_t name_len) {
     for (size_t i = 0; i < st->count; i++)
-        if (slice_eq(st->data[i].name, st->data[i].name_len, name, name_len))
-            return &st->data[i];
+        if (slice_eq(st->data[i].name, st->data[i].name_len, name, name_len)) return &st->data[i];
     return NULL;
 }
 
-bool tarm_symbol_table_exists(const SymbolTable *st,
-                              const char *name, uint32_t name_len) {
+bool tarm_symbol_table_exists(const SymbolTable *st, const char *name, uint32_t name_len) {
     return tarm_symbol_table_find(st, name, name_len) != NULL;
 }
 
-int tarm_symbol_table_lookup(const SymbolTable *st,
-                             const char *name, uint32_t name_len) {
+int tarm_symbol_table_lookup(const SymbolTable *st, const char *name, uint32_t name_len) {
     const Symbol *sym = tarm_symbol_table_find(st, name, name_len);
     return sym ? sym->offset : -1;
 }
 
-DataType tarm_symbol_table_type(const SymbolTable *st,
-                                const char *name, uint32_t name_len) {
+DataType tarm_symbol_table_type(const SymbolTable *st, const char *name, uint32_t name_len) {
     const Symbol *sym = tarm_symbol_table_find(st, name, name_len);
     return sym ? sym->type : tarm_datatype_of(Int64);
 }
 
-int tarm_symbol_table_string_length(const SymbolTable *st,
-                                    const char *name, uint32_t name_len) {
+int tarm_symbol_table_string_length(const SymbolTable *st, const char *name, uint32_t name_len) {
     const Symbol *sym = tarm_symbol_table_find(st, name, name_len);
     return sym ? (int)sym->size : -1;
 }
@@ -130,20 +123,20 @@ bool tarm_symbol_table_label_id(const SymbolTable *st, const char *name, uint32_
 // Declaração
 // ------------------------------------------------------------------------------------------------
 
-bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_len,
-                               DataType type, size_t size, int *out_offset) {
+bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_len, DataType type,
+                               size_t size, int *out_offset) {
     if (find_mut(st, name, name_len) != NULL)
-        return false;   // redeclaração — quem chama reporta, com a posição do nó
+        return false; // redeclaração — quem chama reporta, com a posição do nó
 
     size_t bytes = (size > 0) ? size : tarm_symbol_table_data_size(type.type);
-    if(type.is_array) bytes = bytes * (size_t)type.array_len;
+    if (type.is_array) bytes = bytes * (size_t)type.array_len;
 
     // Cada slot ocupa um múltiplo de 8: mantém os acessos alinhados e simplifica o prólogo.
     st->current_stack_offset -= (int)align_up(bytes, 8);
 
     Symbol *sym = entry_push(st);
     if (!sym) {
-        st->current_stack_offset += (int)align_up(bytes, 8);   // desfaz a reserva
+        st->current_stack_offset += (int)align_up(bytes, 8); // desfaz a reserva
         return false;
     }
 
@@ -161,15 +154,14 @@ bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_
 
 bool tarm_symbol_table_declare_global(SymbolTable *st, const char *name, uint32_t name_len,
                                       DataType type, size_t size, size_t *out_label_id) {
-    if (find_mut(st, name, name_len) != NULL)
-        return false;
+    if (find_mut(st, name, name_len) != NULL) return false;
 
     Symbol *sym = entry_push(st);
     if (!sym) return false;
 
     sym->name      = name;
     sym->name_len  = name_len;
-    sym->offset    = 0;   // globais não usam offset de frame
+    sym->offset    = 0; // globais não usam offset de frame
     sym->type      = type;
     sym->size      = (size > 0) ? size : tarm_symbol_table_data_size(type.type);
     sym->label_id  = st->next_label_id++;
@@ -201,7 +193,6 @@ size_t tarm_symbol_table_scope_begin(SymbolTable *st) {
 }
 
 void tarm_symbol_table_scope_end(SymbolTable *st, size_t mark) {
-    if (mark <= st->count)
-        st->count = mark;
+    if (mark <= st->count) st->count = mark;
     st->current_stack_offset = st->initial_stack_offset;
 }

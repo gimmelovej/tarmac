@@ -45,7 +45,7 @@ typedef enum {
 /// @details Todas partem de `Int`, que é o tipo dos literais inteiros — alargar a partir dele é o
 /// único caso em que a conversão não perde informação de forma surpreendente. `IntToChar` é a
 /// exceção que estreita, e por isso a faixa do literal é conferida antes, na análise semântica.
-typedef enum{
+typedef enum {
     IntToBool,
     IntToFloat,
     IntToInt64,

@@ -31,9 +31,9 @@
 /// `label_id` identifica o rótulo `globobj_<label_id>` do dado estático em `.data`; nesse caso
 /// `offset` não é usado.
 typedef struct {
-    const char *name;     ///< Fatia do buffer de origem; não termina em '\0'.
+    const char *name; ///< Fatia do buffer de origem; não termina em '\0'.
     uint32_t    name_len;
-    int         offset;   ///< Relativo a `%rbp` (só para locais).
+    int         offset; ///< Relativo a `%rbp` (só para locais).
     DataType    type;
     size_t      size;
     size_t      label_id; ///< Id do rótulo `globobj_N` (só relevante quando `is_global`).
@@ -49,7 +49,7 @@ typedef struct {
 
     int    initial_stack_offset;
     int    current_stack_offset;
-    size_t next_label_id;   ///< Contador dos rótulos `globobj_N`.
+    size_t next_label_id; ///< Contador dos rótulos `globobj_N`.
 } SymbolTable;
 
 /// @brief Prepara uma tabela vazia com o frame no offset inicial.
@@ -67,8 +67,10 @@ size_t tarm_symbol_table_data_size(BaseType type);
 /// @note Fica aqui, e não em `types.h`, porque depende de `tarm_symbol_table_data_size` — `types.h`
 /// é só vocabulário, sem lógica.
 static inline DataType tarm_datatype_of(BaseType base) {
-    DataType t = { .type = base, .size_of = tarm_symbol_table_data_size(base),
-                   .is_array = false, .array_len = 0 };
+    DataType t = {.type      = base,
+                  .size_of   = tarm_symbol_table_data_size(base),
+                  .is_array  = false,
+                  .array_len = 0};
     return t;
 }
 
@@ -78,24 +80,21 @@ static inline DataType tarm_datatype_of(BaseType base) {
 /// busca uma vez só e devolve tudo de uma vez.
 /// @warning O ponteiro é invalidado por qualquer `declare` posterior, que pode realocar o vetor.
 /// Use-o antes da próxima declaração, ou copie o `Symbol`.
-const Symbol *tarm_symbol_table_find(const SymbolTable *st,
-                                     const char *name, uint32_t name_len);
+const Symbol *tarm_symbol_table_find(const SymbolTable *st, const char *name, uint32_t name_len);
 
 /// @brief Indica se já existe uma variável com o nome dado.
-bool tarm_symbol_table_exists(const SymbolTable *st,
-                              const char *name, uint32_t name_len);
+bool tarm_symbol_table_exists(const SymbolTable *st, const char *name, uint32_t name_len);
 
 /// @brief Offset (relativo a `%rbp`) da variável.
 /// @return O offset, ou -1 se a variável não existir na tabela.
-int tarm_symbol_table_lookup(const SymbolTable *st,
-                             const char *name, uint32_t name_len);
+int tarm_symbol_table_lookup(const SymbolTable *st, const char *name, uint32_t name_len);
 
 /// @brief Registra uma variável local, reservando espaço na stack conforme `type`.
 /// @param size Tamanho a reservar; passe 0 para usar o tamanho natural do `DataType`.
 /// @param out_offset Recebe o offset atribuído. Pode ser `NULL`.
 /// @return `false` se o nome já existir no escopo ou se a realocação falhar.
-bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_len,
-                               DataType type, size_t size, int *out_offset);
+bool tarm_symbol_table_declare(SymbolTable *st, const char *name, uint32_t name_len, DataType type,
+                               size_t size, int *out_offset);
 
 /// @brief Registra uma variável global, atribuindo o próximo rótulo `globobj_N`.
 /// @param out_label_id Recebe o id do rótulo. Pode ser `NULL`.
@@ -105,13 +104,11 @@ bool tarm_symbol_table_declare_global(SymbolTable *st, const char *name, uint32_
 
 /// @brief Tipo declarado da variável.
 /// @return `Int64` se a variável não existir na tabela.
-DataType tarm_symbol_table_type(const SymbolTable *st,
-                                const char *name, uint32_t name_len);
+DataType tarm_symbol_table_type(const SymbolTable *st, const char *name, uint32_t name_len);
 
 /// @brief Comprimento em bytes armazenado para a variável (relevante para String).
 /// @return -1 se a variável não existir.
-int tarm_symbol_table_string_length(const SymbolTable *st,
-                                    const char *name, uint32_t name_len);
+int tarm_symbol_table_string_length(const SymbolTable *st, const char *name, uint32_t name_len);
 
 /// @brief Id do rótulo `globobj_N` de uma variável global.
 /// @param out_id Recebe o id.

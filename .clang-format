@@ -63,8 +63,10 @@ SpaceBeforeParens: ControlStatements
 BreakBeforeTernaryOperators: true
 
 # --- O que a máquina não decide -----------------------------------------------------------------
-# A ordem dos includes é deliberada (o header da própria unidade vem primeiro) e os comentários
-# são prosa do autor: nem um nem outro são reordenados ou requebrados.
+# A ordem dos includes é deliberada (o header da própria unidade vem primeiro), os comentários são
+# prosa do autor e as strings de mensagem são texto do usuário: nada disso é reordenado, requebrado
+# ou fatiado.
 SortIncludes: Never
 ReflowComments: false
+BreakStringLiterals: false
 InsertNewlineAtEOF: true

@@ -27,7 +27,7 @@ typedef struct {
 
 /// @brief Deixa a arena vazia e pronta para a primeira alocação.
 /// @note Não aloca nada: o primeiro bloco só nasce no primeiro `arena_alloc`.
-void  arena_init(Arena *a);
+void arena_init(Arena *a);
 
 /// @brief Reserva `size` bytes na arena.
 /// @return Ponteiro para a região reservada, ou NULL se não houver memória.
@@ -40,6 +40,6 @@ void *arena_alloc(Arena *a, size_t size);
 /// @brief Libera todos os blocos da arena de uma vez.
 /// @warning Invalida **todo** ponteiro devolvido por `arena_alloc` nesta arena.
 /// @note Deixa a arena vazia e reutilizável, de modo que chamá-la duas vezes é inofensivo.
-void  arena_free(Arena *a);
+void arena_free(Arena *a);
 
 #endif

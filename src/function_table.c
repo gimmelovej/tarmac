@@ -23,14 +23,14 @@ static bool slice_eq(const char *a, uint32_t a_len, const char *b, uint32_t b_le
 // já contabilizado.
 static FunctionSignature *entry_push(FunctionTable *ft) {
     if (ft->count == ft->capacity) {
-        size_t new_capacity = (ft->capacity == 0) ? 8 : ft->capacity * 2;
-        FunctionSignature *buffer = realloc(ft->data, new_capacity * sizeof *ft->data);
+        size_t             new_capacity = (ft->capacity == 0) ? 8 : ft->capacity * 2;
+        FunctionSignature *buffer       = realloc(ft->data, new_capacity * sizeof *ft->data);
 
         if (buffer == NULL) {
             tarm_system_error("Não foi possível realocar a tabela de funções");
             return NULL;
         }
-        ft->data = buffer;
+        ft->data     = buffer;
         ft->capacity = new_capacity;
     }
 
@@ -93,12 +93,12 @@ bool tarm_function_table_register_natives(FunctionTable *ft) {
     // argumento contra ela, e só então a Codegen escolhe o rótulo.
     FunctionSignature *print = register_native(ft, "print", Void, NULL);
     if (!print) return false;
-    print->is_variadic    = true;
-    print->dispatch_param = 0;
-    print->param_count    = 1;
-    print->accepted[0]    = TARM_TYPE_BIT(Int)  | TARM_TYPE_BIT(Int64) | TARM_TYPE_BIT(Float)
-                          | TARM_TYPE_BIT(Bool) | TARM_TYPE_BIT(Char)  | TARM_TYPE_BIT(String);
-    print->symbol_by_type[Int]    = "tarm_print_int";
+    print->is_variadic         = true;
+    print->dispatch_param      = 0;
+    print->param_count         = 1;
+    print->accepted[0]         = TARM_TYPE_BIT(Int) | TARM_TYPE_BIT(Int64) | TARM_TYPE_BIT(Float) |
+                                 TARM_TYPE_BIT(Bool) | TARM_TYPE_BIT(Char) | TARM_TYPE_BIT(String);
+    print->symbol_by_type[Int] = "tarm_print_int";
     print->symbol_by_type[Int64]  = "tarm_print_int";
     print->symbol_by_type[Float]  = "tarm_print_float";
     print->symbol_by_type[Bool]   = "tarm_print_bool";
@@ -183,31 +183,27 @@ bool tarm_function_table_declare(FunctionTable *ft, const char *name, uint32_t n
 
 // Busca linear: são poucas dezenas de funções num programa típico, e o custo de manter um índice
 // não se paga. Se o perfil acusar, é aqui que ele entra, sem mexer na API.
-const FunctionSignature *tarm_function_table_find(const FunctionTable *ft,
-                                                  const char *name, uint32_t name_len) {
+const FunctionSignature *tarm_function_table_find(const FunctionTable *ft, const char *name,
+                                                  uint32_t name_len) {
     for (size_t i = 0; i < ft->count; i++) {
         const FunctionSignature *sig = &ft->data[i];
-        if (!sig->is_method && slice_eq(sig->name, sig->name_len, name, name_len))
-            return sig;
+        if (!sig->is_method && slice_eq(sig->name, sig->name_len, name, name_len)) return sig;
     }
     return NULL;
 }
 
-const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft,
-                                                         const char *name, uint32_t name_len,
-                                                         BaseType receiver) {
+const FunctionSignature *tarm_function_table_find_method(const FunctionTable *ft, const char *name,
+                                                         uint32_t name_len, BaseType receiver) {
     for (size_t i = 0; i < ft->count; i++) {
         const FunctionSignature *sig = &ft->data[i];
-        if (sig->is_method &&
-            sig->receiver == receiver &&
+        if (sig->is_method && sig->receiver == receiver &&
             slice_eq(sig->name, sig->name_len, name, name_len))
             return sig;
     }
     return NULL;
 }
 
-bool tarm_function_table_exists(const FunctionTable *ft,
-                                const char *name, uint32_t name_len) {
+bool tarm_function_table_exists(const FunctionTable *ft, const char *name, uint32_t name_len) {
     return tarm_function_table_find(ft, name, name_len) != NULL;
 }
 
@@ -219,24 +215,19 @@ bool tarm_function_table_check_arity(const FunctionSignature *sig, size_t arg_co
 // Três formas de escrever a mesma coisa, resolvidas num lugar só para que a semântica não repita a
 // distinção em cada caso de chamada.
 uint32_t tarm_function_table_accepted_mask(const FunctionSignature *sig, size_t index) {
-    if (sig->is_variadic)
-        return sig->accepted[0];
+    if (sig->is_variadic) return sig->accepted[0];
 
-    if (index >= sig->param_count)
-        return 0;
+    if (index >= sig->param_count) return 0;
 
-    if (sig->accepted[index] != 0)
-        return sig->accepted[index];
+    if (sig->accepted[index] != 0) return sig->accepted[index];
 
     return TARM_TYPE_BIT(sig->params[index]);
 }
 
 const char *tarm_function_table_symbol(const FunctionSignature *sig, BaseType dispatch_type) {
-    if (!sig->is_native)
-        return NULL;   // função do usuário: o rótulo sai do nome, na Codegen
+    if (!sig->is_native) return NULL; // função do usuário: o rótulo sai do nome, na Codegen
 
-    if (sig->dispatch_param < 0)
-        return sig->symbol;
+    if (sig->dispatch_param < 0) return sig->symbol;
 
     return sig->symbol_by_type[dispatch_type];
 }
