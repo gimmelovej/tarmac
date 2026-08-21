@@ -31,6 +31,7 @@
 /// encontrar uma conversão implícita permitida.
 /// @note `ExprIndex` e `ExprArrayLit` são o suporte a array, **novo e em desenvolvimento** — ver
 /// docs/parser.md#arrays-novo-e-em-desenvolvimento.
+// clang-format off: o agrupamento por linha (literais, nomes, declarações...) é desenho manual.
 typedef enum {
     ExprInteger, ExprFloat, ExprBool, ExprString, ExprChar,
     ExprIdentifier, ExprBinary, ExprAssign,
@@ -38,6 +39,7 @@ typedef enum {
     ExprConditional, ExprWhile, ExprReturn, ExprCast,
     ExprIndex, ExprArrayLit
 } ExprKind;
+// clang-format on
 
 /// @brief Conversão implícita representada por um nó `ExprCast`.
 /// @details Todas partem de `Int`, que é o tipo dos literais inteiros — alargar a partir dele é o
@@ -56,11 +58,13 @@ typedef enum{
 /// @note `OpNone` é a exceção: nenhuma expressão o produz e ele nunca chega a um nó. É o sentinela
 /// interno com que `parse_assignment` distingue o `=` simples de uma atribuição composta — ver
 /// docs/parser.md#atribuições-compostas-como-açúcar.
+// clang-format off: aritméticos numa linha, comparações na outra — o agrupamento é deliberado.
 typedef enum {
     OpAdd, OpSub, OpMul, OpDiv,
     OpEq, OpGt, OpLt, OpGtEq, OpLtEq,
     OpNone ///< Sentinela do Parser ("nenhum composto"); os `switch` sobre operadores não o tratam.
 } BinaryOp;
+// clang-format on
 
 typedef struct Expr Expr;
 
@@ -75,6 +79,7 @@ struct Expr {
     DataType type;
     uint32_t line, col;
 
+    // clang-format off: as variantes de uma linha e as colunas alinhadas são desenho manual.
     union {
         struct { int64_t value; }                    integer;
         /// Texto original do literal, não um `double`: a conversão fica para a geração de código,
@@ -154,6 +159,7 @@ struct Expr {
 
         struct { Expr *value; } ret;   ///< `value` é NULL num `return;` sem expressão.
     } as;
+    // clang-format on
 };
 
 /// @brief Vetor dinâmico de nós, usado **durante** a análise sintática.

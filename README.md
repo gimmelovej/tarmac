@@ -45,10 +45,20 @@ tarmac/
 ├── src/            # Implementação (.c) de todo o compilador
 ├── runtime/        # Rotinas de suporte em assembly (.s), montadas e linkadas ao programa
 ├── docs/           # Documentação de referência conceitual (arquitetura, parser, runtime)
+├── .vscode/        # Configuração compartilhada do editor (ver a nota abaixo)
+├── .clang-format   # Estilo oficial de formatação, aplicado pelo formatOnSave e pelo Ctrl+Shift+I
 ├── CMakeLists.txt  # Build do executável `tarm`
 ├── TODO.md         # Próximas correções e novidades, em ordem de prioridade
 └── README.md       # Este arquivo
 ```
+
+> **Por que `.vscode/` é versionado.** O diretório alinha as propriedades de C entre as extensões
+> do editor — a C/C++ da Microsoft, por padrão, entra em conflito com o projeto e chega a aceitar
+> snippets de C++ em arquivos C. O `settings.json` guarda a associação `*.h → C` (sem ela, um
+> cabeçalho novo abre como C++) e o `editor.formatOnSave`, que aplica o `.clang-format` da raiz a
+> cada salvamento — assim o estilo do código não depende de configuração local de quem clona.
+> Trechos de desenho manual (agrupamento de enums, a união da AST) ficam protegidos por
+> `// clang-format off/on`.
 
 | Módulo | Responsabilidade |
 |---|---|

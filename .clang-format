@@ -1,0 +1,70 @@
+# ================================================================================================
+# .clang-format — estilo oficial de formatação do Tarmac em C.
+#
+# A referência visual é src/parser.c: chave colada (K&R), 4 espaços, limite de 100 colunas e
+# colunas alinhadas em atribuições, declarações e `case` curtos. O formatOnSave do
+# .vscode/settings.json aplica este arquivo em todo salvamento; Ctrl+Shift+I também o obedece.
+#
+# Regra de ouro: comentário é texto do autor — ReflowComments desligado garante que os banners de
+# cabeçalho e a prosa dos `//` nunca sejam requebrados pela máquina.
+#
+# Trechos de desenho manual (o agrupamento dos enums e a união da AST, em include/ast.h) ficam
+# protegidos por pares `// clang-format off: <motivo>` ... `// clang-format on` — é a válvula de
+# escape oficial do clang-format para tabelas desenhadas à mão.
+# ================================================================================================
+Language: Cpp
+BasedOnStyle: LLVM
+
+# --- Medidas básicas ----------------------------------------------------------------------------
+IndentWidth: 4
+TabWidth: 4
+UseTab: Never
+ColumnLimit: 100
+ContinuationIndentWidth: 4
+MaxEmptyLinesToKeep: 2
+
+# --- Chaves e blocos curtos ---------------------------------------------------------------------
+# Chave colada, como em parser.c. Guards de uma instrução ficam na mesma linha
+# (`if (!left) return NULL;`); função, laço e bloco sempre abrem corpo em linhas próprias.
+BreakBeforeBraces: Attach
+AllowShortIfStatementsOnASingleLine: WithoutElse
+AllowShortLoopsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: None
+AllowShortBlocksOnASingleLine: Never
+AllowShortEnumsOnASingleLine: false
+
+# --- switch -------------------------------------------------------------------------------------
+# `case` indentado dentro do switch, e os despachos curtos (`case KwInt: return Int;`) numa linha
+# só, com a coluna dos corpos alinhada — o estilo das tabelas de datatype_from_token (parser.c) e
+# tarm_token_kind_name (lexer.c).
+IndentCaseLabels: true
+AllowShortCaseLabelsOnASingleLine: true
+AlignConsecutiveShortCaseStatements:
+  Enabled: true
+  AcrossEmptyLines: false
+  AcrossComments: false
+  AlignCaseColons: false
+
+# --- Alinhamento de colunas ---------------------------------------------------------------------
+# O alinhamento vertical de `tarm_parser_init` e das declarações locais (`Token   t = ...`).
+AlignConsecutiveAssignments: Consecutive
+AlignConsecutiveDeclarations: Consecutive
+AlignTrailingComments:
+  Kind: Always
+AlignAfterOpenBracket: Align
+AlignOperands: Align
+
+# --- Ponteiros, espaços e operadores ------------------------------------------------------------
+# Asterisco junto do nome (`Expr *e`), espaço só depois de palavra-chave de controle
+# (`if (`, `while (` — chamada de função sem espaço).
+PointerAlignment: Right
+DerivePointerAlignment: false
+SpaceBeforeParens: ControlStatements
+BreakBeforeTernaryOperators: true
+
+# --- O que a máquina não decide -----------------------------------------------------------------
+# A ordem dos includes é deliberada (o header da própria unidade vem primeiro) e os comentários
+# são prosa do autor: nem um nem outro são reordenados ou requebrados.
+SortIncludes: Never
+ReflowComments: false
+InsertNewlineAtEOF: true
