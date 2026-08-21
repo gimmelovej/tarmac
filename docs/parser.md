@@ -122,8 +122,9 @@ só agrupa o que sobra, então a árvore já sai com o agrupamento certo.
 | 3 | `parse_relational` | `>` `>=` `<` `<=` | à esquerda |
 | 4 | `parse_additive` | `+` `-` | à esquerda |
 | 5 | `parse_multiplicative` | `*` `/` | à esquerda |
-| 6 | `parse_postfix` | `[ ]` (indexação), `.` (método) | à esquerda |
-| 7 | `parse_primary` | literais, identificador, chamada, `( )` | — |
+| 6 | `parse_unary` | `-` (menos unário) | à direita |
+| 7 | `parse_postfix` | `[ ]` (indexação), `.` (método) | à esquerda |
+| 8 | `parse_primary` | literais, identificador, chamada, `( )` | — |
 
 A associatividade à esquerda vem de reaproveitar `left` como acumulador dentro do laço: cada
 operador encontrado transforma o que já havia no filho esquerdo do nó novo. A atribuição inverte
@@ -134,6 +135,28 @@ conferido: se não for um `ExprIdentifier` nem um `ExprIndex`, sai erro de sinta
 dele. Isso mantém a produção simples e ainda assim rejeita `1 = 2` com uma mensagem específica, em
 vez de um "token inesperado" genérico. O `ExprIndex` como alvo é o que permite `v[0] = 9` — ver
 [Arrays](#arrays-novo-e-em-desenvolvimento).
+
+### Menos unário, como açúcar
+
+`-x` **não tem nó próprio**: `parse_unary` o desfaz em duas formas, conforme o operando.
+
+```tarmac
+int a = -5;      // o literal já nasce negativo
+int b = -a;      // vira `0 - a`, um ExprBinary com OpSub
+```
+
+Dobrar o literal na hora não é só economia de um nó. Sem isso, `-9223372036854775808` teria de
+passar pelo positivo correspondente, que não cabe em `int64_t`; com a dobra, o valor nunca existe
+positivo. É o mesmo motivo pelo qual `_format_int`, no runtime, lida com `INT64_MIN` sem caso
+especial.
+
+A produção chama a si mesma, o que faz `-(-x)` funcionar e coloca o unário **acima** da
+multiplicação na precedência — ele fica entre `parse_multiplicative` e `parse_postfix`, então
+`-a * b` agrupa como `(-a) * b`.
+
+> Um nó dedicado (`ExprUnary`) está previsto. Enquanto o açúcar serve, a análise semântica e a
+> geração de código não precisam conhecer construção nenhuma nova: o que chega a elas é um `OpSub`
+> comum. Ver o [`TODO.md`](../TODO.md).
 
 ---
 

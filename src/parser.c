@@ -23,6 +23,7 @@ static Expr *parse_equality(Parser *ps);
 static Expr *parse_relational(Parser *ps);
 static Expr *parse_additive(Parser *ps);
 static Expr *parse_multiplicative(Parser *ps);
+static Expr *parse_unary(Parser *ps);
 static Expr *parse_postfix(Parser *ps);
 static Expr *parse_primary(Parser *ps);
 static bool parse_type(Parser *ps, DataType *out);
@@ -128,8 +129,14 @@ static bool parse_type(Parser *ps, DataType *out){
     *out = tarm_datatype_of(datatype_from_token(kw.kind));
     if(match(ps, LBracket)){
         if (!expect(ps, LiteralInteger, "o tamanho do array")) return false;
-        out->is_array = true;
-        out->array_len = (size_t)parse_int_slice(previous(ps).start, previous(ps).len);
+
+        // O literal do tamanho é lido **depois** do `expect`, que é quem o consome: é `previous`
+        // nesse ponto, e não antes. Capturá-lo no topo da função pegaria o token anterior ao
+        // próprio tipo.
+        Token size_tok = previous(ps);
+
+        out->is_array  = true;
+        out->array_len = (size_t)parse_int_slice(size_tok.start, size_tok.len);
         if (!expect(ps, RBracket, "']' ao fechar o tamanho do array")) return false;
     }
 
@@ -493,7 +500,7 @@ static Expr *parse_additive(Parser *ps) {
 }
 
 static Expr *parse_multiplicative(Parser *ps) {
-    Expr *left = parse_postfix(ps);
+    Expr *left = parse_unary(ps);
     if (!left) return NULL;
 
     for (;;) {
@@ -505,12 +512,49 @@ static Expr *parse_multiplicative(Parser *ps) {
         else break;
 
         advance(ps);
-        Expr *right = parse_postfix(ps);
+        Expr *right = parse_unary(ps);
         if (!right) return NULL;
         left = make_binary(ps, op, left, right, t);
         if (!left) return NULL;
     }
     return left;
+}
+
+// Menos unário. Não há nó próprio para ele: o `-` é **açúcar sintático**, desfeito aqui mesmo em
+// duas formas, conforme o operando.
+//
+//   -5   → o literal já nasce negativo (dobra a constante no próprio nó)
+//   -x   → `0 - x`, um `ExprBinary` com `OpSub` e um zero à esquerda
+//
+// Dobrar o literal não é só otimização: sem isso, `int64 a = -9223372036854775808` precisaria
+// passar pelo positivo, que não cabe em `int64_t`. Com a dobra, o valor nunca existe positivo.
+//
+// A recursão (`parse_unary` chamando a si mesma) é o que faz `--x` e `-(-x)` funcionarem, e é
+// também o que dá ao unário precedência maior que a multiplicação: ele entra entre
+// `parse_multiplicative` e `parse_postfix`.
+//
+// @note Um nó dedicado (`ExprUnary`) está previsto — ver o TODO.md. Enquanto o açúcar serve, a
+// árvore que chega à análise semântica não tem nenhuma construção nova para tratar.
+static Expr *parse_unary(Parser *ps){
+    Token t = peek(ps);
+
+    if(match(ps,Minus)){
+        Expr *operand = parse_unary(ps);
+        if(!operand) return NULL;
+
+        if(operand->kind == ExprInteger){
+            operand->as.integer.value = -operand->as.integer.value;
+            operand->line = t.line;
+            operand->col  = t.col;
+            return operand;
+        }
+
+        Expr *zero = ast_expr_new(ps->arena, ExprInteger, t.line, t.col);
+        if (!zero) return NULL;
+        zero->as.integer.value = 0;
+        return make_binary(ps, OpSub, zero, operand, t);
+    }
+    return parse_postfix(ps);
 }
 
 // Sufixos que se aplicam a um valor já reconhecido: indexação (`v[i]`) e chamada de método

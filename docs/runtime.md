@@ -106,10 +106,11 @@ segue essa disciplina.
   programa, como em C.
 - **`tarm_print_str` lê do header** (`OBJ_DATA`/`OBJ_LEN`), então imprime exatamente os bytes do
   objeto — sem depender de terminador nulo e sem varrer a string para achar o tamanho.
-- **`tarm_print_int` imprime apenas valores não-negativos.** A formatação é feita por
-  `_format_uint`, que trata o valor como **sem sinal** de 64 bits: um número negativo sai como o
-  complemento de dois lido em decimal (`0 - 5` imprime `18446744073709551611`). Tratar o sinal é
-  testar o bit alto, emitir `'-'` e negar antes de formatar — está no [`TODO.md`](../TODO.md).
+- **`tarm_print_int` imprime com sinal.** Quem trata isso é `_format_int`: guarda o sinal, formata o
+  módulo com `_format_uint` e, se era negativo, recua um byte e escreve o `'-'` na frente. Escrever
+  da direita para a esquerda é o que torna isso barato — o sinal entra por último, sem deslocar
+  nada. `INT64_MIN` cai de pé por acidente feliz: `negq` sobre ele devolve ele mesmo, e a leitura
+  sem sinal de `_format_uint` dá exatamente o módulo que se quer.
 - **`_format_uint` divide em 64 bits** (`divq`), então cobre toda a faixa de `int64`. A divisão em
   32 bits que havia antes truncava qualquer valor a partir de 2³², e um `int64` grande saía como os
   seus 32 bits baixos.
