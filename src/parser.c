@@ -28,6 +28,8 @@ static Expr *parse_postfix(Parser *ps);
 static Expr *parse_primary(Parser *ps);
 static bool parse_type(Parser *ps, DataType *out);
 
+static Expr *make_binary(Parser *ps, BinaryOp op, Expr *left, Expr *right, Token t);
+
 
 void tarm_parser_init(Parser *ps, const TokenList *toks, Diagnostics *diag, Arena *arena) {
     ps->tokens = *toks;
@@ -86,7 +88,16 @@ static bool expect(Parser *ps, TokenKind kind, const char *what) {
 // Auxiliares
 // ------------------------------------------------------------------------------------------------
 
-
+// Traduz um operador composto na operação binária que o dessugaramento vai usar (`+=` → OpAdd,
+// ...). Quando nada casa, `op` fica intocado — `parse_assignment` o inicializa com `OpNone`, e é
+// esse sentinela que depois distingue o `=` simples de um composto.
+static bool match_compound(Parser *ps, BinaryOp *op) {
+    return match(ps, PlusEqual)  ? (*op = OpAdd, true)
+         : match(ps, MinusEqual) ? (*op = OpSub, true)
+         : match(ps, StarEqual)  ? (*op = OpMul, true)
+         : match(ps, SlashEqual)  ? (*op = OpDiv, true)
+         : false;
+}
 static bool match_type_kw(Parser *ps) {
     return match(ps, KwInt)  || match(ps, KwInt64) || match(ps, KwFloat)
         || match(ps, KwChar) || match(ps, KwString) || match(ps, KwBool);
@@ -130,7 +141,7 @@ static bool parse_type(Parser *ps, DataType *out){
     if(match(ps, LBracket)){
         if (!expect(ps, LiteralInteger, "o tamanho do array")) return false;
 
-        // O literal do tamanho é lido **depois** do `expect`, que é quem o consome: é `previous`
+        // O literal do tamanho é lido depois do `expect`, que é quem o consome: é `previous`
         // nesse ponto, e não antes. Capturá-lo no topo da função pegaria o token anterior ao
         // próprio tipo.
         Token size_tok = previous(ps);
@@ -406,34 +417,43 @@ static Expr *parse_expression(Parser *ps) {
     return parse_assignment(ps);
 }
 
-// Associativa à direita: `a = b = c` vira `a = (b = c)`.
+// Associativa à direita: `a = b = c` vira `a = (b = c)`. Os compostos são açúcar, desfeitos aqui
+// mesmo: `a += b` vira `a = a + b`, com o MESMO nó `left` servindo de alvo e de operando esquerdo
+// — ver docs/parser.md#atribuições-compostas-como-açúcar para as consequências dessa dobra.
 static Expr *parse_assignment(Parser *ps) {
-    Expr *expr = parse_equality(ps);
-    if (!expr) return NULL;
+    Expr *left = parse_equality(ps);
+    if (!left) return NULL;
 
-    if (match(ps, Equal)) {
-        Expr *value = parse_assignment(ps);
-        if (!value) return NULL;
-        if (expr->kind != ExprIdentifier && expr->kind != ExprIndex) {
-            tarm_error_at(ps->diag, expr->line, expr->col,
-                        "alvo de atribuição inválido "
+    BinaryOp op = OpNone;
+    if (match(ps, Equal) || match_compound(ps, &op)) {
+        if (left->kind != ExprIdentifier && left->kind != ExprIndex) {
+            tarm_error_at(ps->diag, left->line, left->col,
+                        "alvo de atribuição inesperado "
                         "(esperava um identificador à esquerda de '=')");
             return NULL;
         }
+        Token   t = previous(ps);
+        Expr    *right = parse_assignment(ps);
+        if (!right) return NULL;
 
-        Expr *a = ast_expr_new(ps->arena, ExprAssign, expr->line, expr->col);
+        bool compound = (op != OpNone);
+        if(compound) right =  make_binary(ps, op, left, right, t);
+
+        Expr    *a = ast_expr_new(ps->arena, ExprAssign, left->line, left->col);
         if (!a) return NULL;
-        a->as.assign.target = expr;
-        a->as.assign.value  = value;
+
+        a->as.assign.target = left;
+        a->as.assign.value  = right;
         return a;
     }
-    return expr;
+
+    return left;
 }
 
 // Fabrica o nó binário e reaproveita `left` como acumulador — é o que dá associatividade à
 // esquerda a toda a cadeia abaixo.
 static Expr *make_binary(Parser *ps, BinaryOp op, Expr *left, Expr *right, Token t) {
-    Expr *e = ast_expr_new(ps->arena, ExprBinary, t.line, t.col);
+    Expr    *e = ast_expr_new(ps->arena, ExprBinary, t.line, t.col);
     if (!e) return NULL;
     e->as.binary.op    = op;
     e->as.binary.left  = left;
@@ -486,7 +506,9 @@ static Expr *parse_additive(Parser *ps) {
         BinaryOp op;
         Token    t = peek(ps);
 
-        if      (check(ps, Plus))  op = OpAdd;
+        if      (check(ps, Plus))  {
+            op = OpAdd;
+        }
         else if (check(ps, Minus)) op = OpSub;
         else break;
 

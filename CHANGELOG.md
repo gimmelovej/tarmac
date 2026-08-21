@@ -9,6 +9,36 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [Não lançado]
+
+**Atribuições compostas** na linguagem: `+=`, `-=`, `*=` e `/=`, em variável e em elemento de
+array.
+
+```tarmac
+total += soma(2, 3);
+v[i] *= 2;              // elemento de array também é alvo válido
+x /= 2 + 2;             // o lado direito agrupa inteiro antes: `x = x / 4`
+```
+
+### Adicionado
+- **Atribuições compostas** (`+=`, `-=`, `*=`, `/=`), como **açúcar sintático**: não há nó próprio.
+  `parse_assignment` desfaz `a += b` em `a = a + b` — um `ExprAssign` cujo valor é um `ExprBinary`
+  comum — então a análise semântica e a geração de código não conhecem construção nova, e as regras
+  de tipo, a coerção implícita e o código emitido são os da forma estendida. As consequências do
+  dessugaramento (o alvo aparece duas vezes na árvore e é avaliado duas vezes) estão registradas em
+  `docs/parser.md#atribuições-compostas-como-açúcar`.
+- Os tokens `PlusEqual`, `MinusEqual`, `StarEqual` e `SlashEqual` no Lexer, resolvidos pelo mesmo
+  *lookahead* de um caractere que `==`, `>=` e `<=` já usavam.
+- `OpNone` em `BinaryOp`: o sentinela interno com que `parse_assignment` distingue o `=` simples de
+  um composto. Nenhuma expressão o produz e ele nunca chega a um nó.
+
+### Documentação
+- `docs/parser.md` ganhou a subseção "Atribuições compostas, como açúcar", com a tabela de
+  precedência atualizada.
+- A pendência defasada "Sem menos unário" saiu de `docs/parser.md` — o recurso entrou na
+  `0.3.0-alpha` e a lista não tinha acompanhado.
+- `example.tm` cobre os quatro operadores compostos, inclusive sobre elemento de array.
+
 ## [0.3.0-alpha] - 2026-08-21
 
 **Menos unário** na linguagem e **impressão com sinal** na runtime — as duas metades do mesmo

@@ -67,6 +67,8 @@ static bool is_comparison(BinaryOp op)
     case OpMul:
     case OpDiv:
         return false;
+    case OpNone: 
+        return false;
     }
     return false;
 }
@@ -93,6 +95,8 @@ static const char *binop_name(BinaryOp op)
         return ">=";
     case OpLtEq:
         return "<=";
+    case OpNone:
+        return "?";
     }
     return "?";
 }
@@ -484,6 +488,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
     case ExprAssign:
     {
         Expr *target = e->as.assign.target;
+
         switch (e->as.assign.target->kind)
         {
         case ExprIdentifier:
@@ -500,7 +505,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
             const Symbol *sym = tarm_symbol_table_find(an->symbols, target->as.identifier.name, target->as.identifier.len);
             if (!sym)
             {
-                tarm_error_at(an->diag, e->line, e->col,
+                tarm_error_at(an->diag, target->line, target->col,
                               "atribuição a variável não declarada: '%.*s'",
                               (int)target->as.identifier.len, target->as.identifier.name);
                 check_expr(an, &e->as.assign.value); // segue validando o lado direito
@@ -555,7 +560,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot)
         }
         default:
             tarm_error_at(an->diag, e->line, e->col,
-                          "atribuição semanticamente não permitida");
+                          "atribuição semanticamente inesperada");
         }
         break;
     }

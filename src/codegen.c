@@ -12,7 +12,7 @@
 #include <string.h>
 
 // Registradores de argumento da ABI System V, na ordem.
-static const char *ARG_REGS[6] = { "%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9" };
+static const char *ARG_REGS[6] = {"%rdi", "%rsi", "%rdx", "%rcx", "%r8", "%r9"};
 #define MAX_REG_ARGS 6
 
 // Todo slot local ocupa 8 bytes: mantém `%rsp` alinhado sem cálculo por tipo, e as operações
@@ -66,16 +66,20 @@ static void call_unalign(Codegen *cg, int pad) {
 //
 // Os três andam juntos: `mov_suffix` e `reg_a` formam o par da **escrita** (`movl %eax, ...`), e
 // `mov_load` a instrução da **leitura**.
-static const char *mov_suffix(size_t sz){ return sz==1?"b":sz==2?"w":sz==4?"l":"q"; }
-static const char *reg_a(size_t sz){ return sz==1?"%al":sz==2?"%ax":sz==4?"%eax":"%rax"; }
+static const char *mov_suffix(size_t sz) {
+    return sz == 1 ? "b" : sz == 2 ? "w" : sz == 4 ? "l" : "q";
+}
+static const char *reg_a(size_t sz) {
+    return sz == 1 ? "%al" : sz == 2 ? "%ax" : sz == 4 ? "%eax" : "%rax";
+}
 
 // A leitura estende o **sinal** até 64 bits, e não apenas copia os bytes: um `int` negativo lido de
 // um slot de 4 bytes precisa continuar negativo em `%rax`, onde o resto da expressão o encontra.
 static const char *mov_load(size_t sz) {
     switch (sz) {
-        case 1: return "movsbq";
-        case 2: return "movswq";
-        case 4: return "movslq";
+        case 1:  return "movsbq";
+        case 2:  return "movswq";
+        case 4:  return "movslq";
         default: return "movq";
     }
 }
@@ -85,8 +89,7 @@ static size_t next_label(Codegen *cg) {
 }
 
 static void unsupported(Codegen *cg, const Expr *e, const char *what) {
-    tarm_error_at(cg->diag, e->line, e->col,
-                  "geração de código ainda não suporta %s", what);
+    tarm_error_at(cg->diag, e->line, e->col, "geração de código ainda não suporta %s", what);
 }
 
 // Reserva espaço no frame corrente para a variável e devolve o offset relativo a `%rbp`.
@@ -94,11 +97,9 @@ static void unsupported(Codegen *cg, const Expr *e, const char *what) {
 // O tamanho vai como 0 de propósito: é a tabela de símbolos que o resolve a partir do `DataType`,
 // e é lá que um array pede `size_of * array_len` em vez de um slot só.
 static bool declare_local(Codegen *cg, const Expr *decl, int *out_offset) {
-    return tarm_symbol_table_declare(&cg->symbols,
-                                     decl->as.var_decl.obj->as.identifier.name,
+    return tarm_symbol_table_declare(&cg->symbols, decl->as.var_decl.obj->as.identifier.name,
                                      decl->as.var_decl.obj->as.identifier.len,
-                                     decl->as.var_decl.type,
-                                     0, out_offset);
+                                     decl->as.var_decl.type, 0, out_offset);
 }
 
 // Percorre a subárvore somando os slots que o corpo vai precisar. Roda **antes** de emitir o
@@ -120,7 +121,7 @@ static size_t count_slots(Expr *const *items, size_t count) {
                 const DataType *t = &e->as.var_decl.type;
                 if (t->is_array) {
                     size_t bytes = t->size_of * (size_t)t->array_len;
-                    n += (bytes + SLOT_SIZE - 1) / SLOT_SIZE;   // arredonda para cima
+                    n += (bytes + SLOT_SIZE - 1) / SLOT_SIZE; // arredonda para cima
                 } else {
                     n++;
                 }
@@ -133,8 +134,7 @@ static size_t count_slots(Expr *const *items, size_t count) {
             case ExprWhile:
                 n += count_slots(e->as.while_loop.body, e->as.while_loop.body_count);
                 break;
-            default:
-                break;
+            default: break;
         }
     }
     return n;
@@ -146,11 +146,11 @@ static size_t count_slots(Expr *const *items, size_t count) {
 
 // Escreve em `buf` o operando de memória da variável: `-40(%rbp)` para local, `globobj_3(%rip)`
 // para global. Devolve `false` se o nome não estiver na tabela (bug do compilador, não do usuário).
-static bool var_operand(Codegen *cg, const char *name, uint32_t name_len,
-                        char *buf, size_t buf_size) {
+static bool var_operand(Codegen *cg, const char *name, uint32_t name_len, char *buf,
+                        size_t buf_size) {
     const Symbol *sym = tarm_symbol_table_find(&cg->symbols, name, name_len);
     if (!sym) return false;
-    
+
     if (sym->is_global)
         snprintf(buf, buf_size, "globobj_%zu(%%rip)", sym->label_id);
     else
@@ -194,13 +194,17 @@ static void emit_string_bytes(Codegen *cg, const char *text, uint32_t len) {
 
         if (c == '\\' && i + 1 < len) {
             char escaped = text[++i];
-            if (escaped == '\'') fputc('\'', cg->out);
-            else                 fprintf(cg->out, "\\%c", escaped);
+            if (escaped == '\'')
+                fputc('\'', cg->out);
+            else
+                fprintf(cg->out, "\\%c", escaped);
             continue;
         }
 
-        if (c == '"') fputs("\\\"", cg->out);
-        else          fputc(c, cg->out);
+        if (c == '"')
+            fputs("\\\"", cg->out);
+        else
+            fputc(c, cg->out);
     }
 
     fputs("\"\n", cg->out);
@@ -248,11 +252,12 @@ static bool gen_binary_op(Codegen *cg, const Expr *e) {
             fprintf(cg->out, "    idivq   %%rcx\n");
             return true;
 
-        case OpEq:   gen_compare(cg, "sete");  return true;
-        case OpGt:   gen_compare(cg, "setg");  return true;
-        case OpLt:   gen_compare(cg, "setl");  return true;
+        case OpEq:   gen_compare(cg, "sete"); return true;
+        case OpGt:   gen_compare(cg, "setg"); return true;
+        case OpLt:   gen_compare(cg, "setl"); return true;
         case OpGtEq: gen_compare(cg, "setge"); return true;
         case OpLtEq: gen_compare(cg, "setle"); return true;
+        case OpNone: return false;
     }
     return false;
 }
@@ -267,8 +272,8 @@ static bool gen_binary_op(Codegen *cg, const Expr *e) {
 // Como no Tarmac em C++, o prefixo separa o que o usuário declarou do que o assembler e o linker
 // já usam. Ele não isola das rotinas de runtime, que também são `tarm_*`: uma função chamada
 // `print_int` colidiria com `tarm_print_int` na hora do link.
-static void mangle(const Expr *decl_or_call, const char *name, uint32_t name_len,
-                   char *buf, size_t buf_size) {
+static void mangle(const Expr *decl_or_call, const char *name, uint32_t name_len, char *buf,
+                   size_t buf_size) {
     (void)decl_or_call;
 
     if (name_len == 4 && memcmp(name, "main", 4) == 0)
@@ -284,10 +289,10 @@ static const char *call_symbol(Codegen *cg, const Expr *e, char *buf, size_t buf
     const bool is_method = (e->kind == ExprMethod);
 
     const FunctionSignature *sig =
-        is_method ? tarm_function_table_find_method(cg->functions, e->as.call.name,
-                                                    e->as.call.name_len,
-                                                    e->as.call.args[0]->type.type)
-                  : tarm_function_table_find(cg->functions, e->as.call.name, e->as.call.name_len);
+        is_method
+            ? tarm_function_table_find_method(cg->functions, e->as.call.name, e->as.call.name_len,
+                                              e->as.call.args[0]->type.type)
+            : tarm_function_table_find(cg->functions, e->as.call.name, e->as.call.name_len);
 
     if (!sig) return NULL;
 
@@ -352,8 +357,7 @@ static bool gen_call(Codegen *cg, const Expr *e) {
     char        buf[128];
     const char *symbol = call_symbol(cg, e, buf, sizeof buf);
     if (!symbol) {
-        tarm_error_at(cg->diag, e->line, e->col,
-                      "chamada sem símbolo resolvido: '%.*s'",
+        tarm_error_at(cg->diag, e->line, e->col, "chamada sem símbolo resolvido: '%.*s'",
                       (int)e->as.call.name_len, e->as.call.name);
         return false;
     }
@@ -364,7 +368,7 @@ static bool gen_call(Codegen *cg, const Expr *e) {
     }
 
     // Desempilha na ordem inversa: o último empilhado é o último argumento.
-    for (size_t i = argc; i-- > 0; )
+    for (size_t i = argc; i-- > 0;)
         emit_pop(cg, ARG_REGS[i]);
 
     int pad = call_align(cg);
@@ -384,279 +388,266 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
     char operand[64];
 
     switch (e->kind) {
-    case ExprInteger:
-        fprintf(cg->out, "    movq    $%lld, %%rax\n", (long long)e->as.integer.value);
-        return true;
-
-    case ExprBool:
-        fprintf(cg->out, "    movq    $%d, %%rax\n", e->as.boolean.value ? 1 : 0);
-        return true;
-
-    case ExprChar:
-        fprintf(cg->out, "    movq    $%d, %%rax\n", (int)(unsigned char)e->as.char_lit.value);
-        return true;
-
-    case ExprIdentifier:{
-        if (!var_operand(cg, e->as.identifier.name, e->as.identifier.len,
-                         operand, sizeof operand)) {
-            tarm_error_at(cg->diag, e->line, e->col,
-                          "variável sem slot na geração de código: '%.*s'",
-                          (int)e->as.identifier.len, e->as.identifier.name);
-            return false;
-        }
-        fprintf(cg->out, "    movq    %s, %%rax\n", operand);
-        return true;
-    }
-    // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`, resolvido
-    // aqui mesmo e emitido como um deslocamento constante. Com índice variável entra o modo de
-    // endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação em
-    // tempo de execução sem instrução extra. A escala é o `size_of` do elemento, e o processador só
-    // aceita 1, 2, 4 ou 8; todos os tipos da linguagem cabem nesse conjunto.
-    //
-    // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
-    case ExprIndex:{
-        Expr *base = e->as.index.base;
-        const Symbol *sym = tarm_symbol_table_find(&cg->symbols,
-                                               base->as.identifier.name,
-                                               base->as.identifier.len);
-        if (!sym) {
-            tarm_error_at(cg->diag, base->line, base->col,
-                          "variável sem slot na geração de código: '%.*s'",
-                          (int)base->as.identifier.len, base->as.identifier.name);
-            return false;
-        }
-        size_t esz = sym->type.size_of;
-
-        if (e->as.index.index->kind == ExprInteger) {
-            int64_t i = e->as.index.index->as.integer.value;
-            fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n",
-                mov_load(esz), sym->offset + (int)(i * (int64_t)esz));
+        case ExprInteger:
+            fprintf(cg->out, "    movq    $%lld, %%rax\n", (long long)e->as.integer.value);
             return true;
-        } else if(e->as.index.index->kind == ExprIdentifier){
-            if(!gen_expr(cg, e->as.index.index)) return false;
-            fprintf(cg->out, "    %-7s %d(%%rbp, %%rax, %zu), %%rax\n",
-                mov_load(esz), sym->offset,esz);
-            return true;
-        }
 
-        tarm_error_at(cg->diag, base->line, base->col,
-                          "tipo não tratado em array: '%.*s'",
-                          (int)base->as.identifier.len, base->as.identifier.name);
-        return false;
-    }
-    // O lado esquerdo é empilhado enquanto o direito é avaliado — avaliar direto em %rcx perderia
-    // o valor assim que o lado direito usasse o registrador.
-    case ExprBinary:{
-        if (!gen_expr(cg, e->as.binary.left))  return false;
-        emit_push(cg, "%rax");
-        if (!gen_expr(cg, e->as.binary.right)) return false;
-        fprintf(cg->out, "    movq    %%rax, %%rcx\n");
-        emit_pop(cg, "%rax");
-        return gen_binary_op(cg, e);
-    }
-    case ExprAssign:{
-        Expr *target = e->as.assign.target;
-        if (!gen_expr(cg, e->as.assign.value)) return false;    
-        switch (target->kind) {
-        case ExprIdentifier:{
-            if (!var_operand(cg, target->as.identifier.name,
-                            target->as.identifier.len,
-                            operand, sizeof operand)) {
-                tarm_error_at(cg->diag, target->line, target->col,
-                            "variável sem slot na geração de código: '%.*s'",
-                            (int)target->as.identifier.len,
-                            target->as.identifier.name);
+        case ExprBool:
+            fprintf(cg->out, "    movq    $%d, %%rax\n", e->as.boolean.value ? 1 : 0);
+            return true;
+
+        case ExprChar:
+            fprintf(cg->out, "    movq    $%d, %%rax\n", (int)(unsigned char)e->as.char_lit.value);
+            return true;
+
+        case ExprIdentifier: {
+            if (!var_operand(cg, e->as.identifier.name, e->as.identifier.len, operand,
+                             sizeof operand)) {
+                tarm_error_at(cg->diag, e->line, e->col,
+                              "variável sem slot na geração de código: '%.*s'",
+                              (int)e->as.identifier.len, e->as.identifier.name);
                 return false;
             }
-            fprintf(cg->out, "    movq    %%rax, %s\n", operand);
+            fprintf(cg->out, "    movq    %s, %%rax\n", operand);
             return true;
         }
-        // Atribuir a um elemento: o valor já está em `%rax` (gerado acima, antes do `switch`), e o
-        // que falta é o endereço — a mesma conta da leitura, com a escrita na largura do elemento.
+        // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`, resolvido
+        // aqui mesmo e emitido como um deslocamento constante. Com índice variável entra o modo de
+        // endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação em
+        // tempo de execução sem instrução extra. A escala é o `size_of` do elemento, e o processador só
+        // aceita 1, 2, 4 ou 8; todos os tipos da linguagem cabem nesse conjunto.
         //
-        // Com índice variável, o valor a gravar precisa sobreviver à avaliação do índice, que também
-        // termina em `%rax`. Daí o par push/pop em volta: o índice vai para `%rcx`, o valor volta
-        // para `%rax`, e a escrita usa o endereçamento escalado.
-        case ExprIndex:{
-            Expr *base = target->as.index.base;
-            Expr *index = target->as.index.index;
-
-            const Symbol *sym = tarm_symbol_table_find(&cg->symbols, base->as.identifier.name, base->as.identifier.len);
-            if (!sym) return false;
-            
+        // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+        case ExprIndex: {
+            Expr         *base = e->as.index.base;
+            const Symbol *sym  = tarm_symbol_table_find(&cg->symbols, base->as.identifier.name,
+                                                        base->as.identifier.len);
+            if (!sym) {
+                tarm_error_at(cg->diag, base->line, base->col,
+                              "variável sem slot na geração de código: '%.*s'",
+                              (int)base->as.identifier.len, base->as.identifier.name);
+                return false;
+            }
             size_t esz = sym->type.size_of;
 
-            if(index->kind == ExprInteger){
-                int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
-                fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
-                        mov_suffix(esz), reg_a(esz), el_offset);
+            if (e->as.index.index->kind == ExprInteger) {
+                int64_t i = e->as.index.index->as.integer.value;
+                fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n", mov_load(esz),
+                        sym->offset + (int)(i * (int64_t)esz));
                 return true;
-            } else if(index->kind == ExprIdentifier){
-                emit_push(cg, "%rax");
-                gen_expr(cg, index);
-                fprintf(cg->out, "    movq    %%rax, %%rcx\n");
-                emit_pop(cg, "%rax");
-                fprintf(cg->out, "    mov%s    %s, %d(%%rbp, %%rcx, %zu)\n",
-                        mov_suffix(esz), reg_a(esz), sym->offset, esz);
+            } else if (e->as.index.index->kind == ExprIdentifier) {
+                if (!gen_expr(cg, e->as.index.index)) return false;
+                fprintf(cg->out, "    %-7s %d(%%rbp, %%rax, %zu), %%rax\n", mov_load(esz),
+                        sym->offset, esz);
                 return true;
             }
-            tarm_error_at(cg->diag, target->line, target->col,
-                        "alvo de atribuição não suportado");
+
+            tarm_error_at(cg->diag, base->line, base->col, "tipo não tratado em array: '%.*s'",
+                          (int)base->as.identifier.len, base->as.identifier.name);
             return false;
         }
-        default:
-            tarm_error_at(cg->diag, target->line, target->col,
-                        "alvo de atribuição não suportado");
-            return false;
+        // O lado esquerdo é empilhado enquanto o direito é avaliado — avaliar direto em %rcx perderia
+        // o valor assim que o lado direito usasse o registrador.
+        case ExprBinary: {
+            if (!gen_expr(cg, e->as.binary.left)) return false;
+            emit_push(cg, "%rax");
+            if (!gen_expr(cg, e->as.binary.right)) return false;
+            fprintf(cg->out, "    movq    %%rax, %%rcx\n");
+            emit_pop(cg, "%rax");
+            return gen_binary_op(cg, e);
         }
-    }
-    // Local: reserva o slot agora (o prólogo já contou com ele) e grava o valor inicial.
-    // Global: o dado já está em `.data`; aqui só resta o valor inicial, se houver.
-    case ExprVarDecl: {
-        Expr *ident_expr = e->as.var_decl.obj;
-        if (e->as.var_decl.frame == Global) {
-            if (!e->as.var_decl.initializer) return true;
-            if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
-            if (!var_operand(cg, ident_expr->as.identifier.name, ident_expr->as.identifier.len,
-                             operand, sizeof operand)) return false;
-            fprintf(cg->out, "    movq    %%rax, %s\n", operand);
+        case ExprAssign: {
+            Expr *target = e->as.assign.target;
+            if (!gen_expr(cg, e->as.assign.value)) return false;
+            switch (target->kind) {
+                case ExprIdentifier: {
+                    if (!var_operand(cg, target->as.identifier.name, target->as.identifier.len,
+                                     operand, sizeof operand)) {
+                        tarm_error_at(cg->diag, target->line, target->col,
+                                      "variável sem slot na geração de código: '%.*s'",
+                                      (int)target->as.identifier.len, target->as.identifier.name);
+                        return false;
+                    }
+                    fprintf(cg->out, "    movq    %%rax, %s\n", operand);
+                    return true;
+                }
+                // Atribuir a um elemento: o valor já está em `%rax` (gerado acima, antes do `switch`), e o
+                // que falta é o endereço — a mesma conta da leitura, com a escrita na largura do elemento.
+                //
+                // Com índice variável, o valor a gravar precisa sobreviver à avaliação do índice, que também
+                // termina em `%rax`. Daí o par push/pop em volta: o índice vai para `%rcx`, o valor volta
+                // para `%rax`, e a escrita usa o endereçamento escalado.
+                case ExprIndex: {
+                    Expr *base  = target->as.index.base;
+                    Expr *index = target->as.index.index;
+
+                    const Symbol *sym = tarm_symbol_table_find(
+                        &cg->symbols, base->as.identifier.name, base->as.identifier.len);
+                    if (!sym) return false;
+
+                    size_t esz = sym->type.size_of;
+
+                    if (index->kind == ExprInteger) {
+                        int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
+                        fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n", mov_suffix(esz),
+                                reg_a(esz), el_offset);
+                        return true;
+                    } else if (index->kind == ExprIdentifier) {
+                        emit_push(cg, "%rax");
+                        gen_expr(cg, index);
+                        fprintf(cg->out, "    movq    %%rax, %%rcx\n");
+                        emit_pop(cg, "%rax");
+                        fprintf(cg->out, "    mov%s    %s, %d(%%rbp, %%rcx, %zu)\n",
+                                mov_suffix(esz), reg_a(esz), sym->offset, esz);
+                        return true;
+                    }
+                    tarm_error_at(cg->diag, target->line, target->col,
+                                  "alvo de atribuição não suportado");
+                    return false;
+                }
+                default:
+                    tarm_error_at(cg->diag, target->line, target->col,
+                                  "alvo de atribuição não suportado");
+                    return false;
+            }
+        }
+        // Local: reserva o slot agora (o prólogo já contou com ele) e grava o valor inicial.
+        // Global: o dado já está em `.data`; aqui só resta o valor inicial, se houver.
+        case ExprVarDecl: {
+            Expr *ident_expr = e->as.var_decl.obj;
+            if (e->as.var_decl.frame == Global) {
+                if (!e->as.var_decl.initializer) return true;
+                if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
+                if (!var_operand(cg, ident_expr->as.identifier.name, ident_expr->as.identifier.len,
+                                 operand, sizeof operand))
+                    return false;
+                fprintf(cg->out, "    movq    %%rax, %s\n", operand);
+                return true;
+            }
+
+            int offset;
+
+            if (!declare_local(cg, e, &offset)) {
+                tarm_error_at(cg->diag, e->line, e->col,
+                              "não foi possível reservar slot para '%.*s'",
+                              (int)ident_expr->as.identifier.len, ident_expr->as.identifier.name);
+                return false;
+            }
+
+            if (e->as.var_decl.initializer) {
+                // Array: cada elemento é avaliado e gravado no seu offset, sem passar pelo `movq` do
+                // fim — um array não cabe em `%rax`. O passo é `size_of` do elemento.
+                if (e->as.var_decl.type.is_array) {
+                    Expr  *init        = e->as.var_decl.initializer;
+                    int    offset_pool = offset;
+                    size_t esz         = e->as.var_decl.type.size_of;
+                    for (size_t i = 0; i < init->as.array_lit.count; i++) {
+                        if (!gen_expr(cg, init->as.array_lit.elements[i])) return false;
+                        fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n", mov_suffix(esz),
+                                reg_a(esz), offset_pool);
+                        offset_pool += (int)esz;
+                    }
+                    return true;
+                }
+                if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
+            } else {
+                fprintf(cg->out, "    xorl    %%eax, %%eax\n");
+            }
+            fprintf(cg->out, "    movq    %%rax, %d(%%rbp)\n", offset);
             return true;
         }
 
-        int offset;
-
-        if (!declare_local(cg, e, &offset)) {
-            tarm_error_at(cg->diag, e->line, e->col,
-                          "não foi possível reservar slot para '%.*s'",
-                          (int)ident_expr->as.identifier.len, ident_expr->as.identifier.name);
-            return false;
-        }
-
-        if (e->as.var_decl.initializer) {
-            // Array: cada elemento é avaliado e gravado no seu offset, sem passar pelo `movq` do
-            // fim — um array não cabe em `%rax`. O passo é `size_of` do elemento.
-            if (e->as.var_decl.type.is_array) {
-                Expr *init = e->as.var_decl.initializer;
-                int offset_pool = offset;
-                size_t esz = e->as.var_decl.type.size_of;
-                for (size_t i = 0; i < init->as.array_lit.count; i++) {
-                   if (!gen_expr(cg, init->as.array_lit.elements[i])) return false;
-                    fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n",
-                            mov_suffix(esz), reg_a(esz), offset_pool);
-                    offset_pool += (int)esz;
-                }
-                return true;
+        // As conversões da linguagem partem sempre de `Int`. Em slots de 64 bits, alargar é no-op;
+        // só truncar (Char) e normalizar (Bool) exigem instrução.
+        case ExprCast: {
+            if (!gen_expr(cg, e->as.cast.operand)) return false;
+            switch (e->as.cast.castKind) {
+                case IntToInt64: return true;
+                case IntToChar:  fprintf(cg->out, "    movzbq  %%al, %%rax\n"); return true;
+                case IntToBool:
+                    fprintf(cg->out, "    testq   %%rax, %%rax\n");
+                    fprintf(cg->out, "    setne   %%al\n");
+                    fprintf(cg->out, "    movzbq  %%al, %%rax\n");
+                    return true;
+                case IntToFloat: unsupported(cg, e, "conversão para 'float'"); return false;
             }
-            if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
-        } else {
-            fprintf(cg->out, "    xorl    %%eax, %%eax\n");
+            return false;
         }
-        fprintf(cg->out, "    movq    %%rax, %d(%%rbp)\n", offset);
-        return true;
-    }
+        // O objeto vai para `.rodata` e o que fica em `%rax` é o ponteiro para o header — o mesmo que
+        // uma String alocada em tempo de execução entregaria.
+        case ExprString: {
+            size_t id = emit_string_object(cg, e->as.string_lit.text, e->as.string_lit.len);
+            fprintf(cg->out, "    .text\n");
+            fprintf(cg->out, "    leaq    strobj_%zu(%%rip), %%rax\n", id);
+            return true;
+        }
 
-    // As conversões da linguagem partem sempre de `Int`. Em slots de 64 bits, alargar é no-op;
-    // só truncar (Char) e normalizar (Bool) exigem instrução.
-    case ExprCast:{
-        if (!gen_expr(cg, e->as.cast.operand)) return false;
-        switch (e->as.cast.castKind) {
-            case IntToInt64:
-                return true;
-            case IntToChar:
-                fprintf(cg->out, "    movzbq  %%al, %%rax\n");
-                return true;
-            case IntToBool:
-                fprintf(cg->out, "    testq   %%rax, %%rax\n");
-                fprintf(cg->out, "    setne   %%al\n");
-                fprintf(cg->out, "    movzbq  %%al, %%rax\n");
-                return true;
-            case IntToFloat:
-                unsupported(cg, e, "conversão para 'float'");
+        case ExprCall: {
+            bool is_print = e->as.call.name_len == 5 && memcmp(e->as.call.name, "print", 5) == 0;
+            return is_print ? gen_print(cg, e) : gen_call(cg, e);
+        }
+
+        case ExprMethod:
+            return gen_call(cg, e);
+
+            // --- instruções de fluxo -----------------------------------------------------------------
+
+        case ExprConditional: {
+            size_t l_else = next_label(cg);
+            size_t l_end  = next_label(cg);
+
+            if (!gen_expr(cg, e->as.conditional.cond)) return false;
+            fprintf(cg->out, "    testq   %%rax, %%rax\n");
+            fprintf(cg->out, "    je      .L%zu\n", l_else);
+
+            if (!gen_block(cg, e->as.conditional.then_body, e->as.conditional.then_count))
                 return false;
+            fprintf(cg->out, "    jmp     .L%zu\n", l_end);
+
+            fprintf(cg->out, ".L%zu:\n", l_else);
+            if (!gen_block(cg, e->as.conditional.else_body, e->as.conditional.else_count))
+                return false;
+
+            fprintf(cg->out, ".L%zu:\n", l_end);
+            return true;
         }
-        return false;
-    }
-    // O objeto vai para `.rodata` e o que fica em `%rax` é o ponteiro para o header — o mesmo que
-    // uma String alocada em tempo de execução entregaria.
-    case ExprString: {
-        size_t id = emit_string_object(cg, e->as.string_lit.text, e->as.string_lit.len);
-        fprintf(cg->out, "    .text\n");
-        fprintf(cg->out, "    leaq    strobj_%zu(%%rip), %%rax\n", id);
-        return true;
-    }
 
-    case ExprCall: {
-        bool is_print = e->as.call.name_len == 5 &&
-                        memcmp(e->as.call.name, "print", 5) == 0;
-        return is_print ? gen_print(cg, e) : gen_call(cg, e);
-    }
+        case ExprWhile: {
+            size_t l_top = next_label(cg);
+            size_t l_end = next_label(cg);
 
-    case ExprMethod:
-        return gen_call(cg, e);
+            fprintf(cg->out, ".L%zu:\n", l_top);
+            if (!gen_expr(cg, e->as.while_loop.cond)) return false;
+            fprintf(cg->out, "    testq   %%rax, %%rax\n");
+            fprintf(cg->out, "    je      .L%zu\n", l_end);
 
-    // --- instruções de fluxo -----------------------------------------------------------------
-
-    case ExprConditional: {
-        size_t l_else = next_label(cg);
-        size_t l_end  = next_label(cg);
-
-        if (!gen_expr(cg, e->as.conditional.cond)) return false;
-        fprintf(cg->out, "    testq   %%rax, %%rax\n");
-        fprintf(cg->out, "    je      .L%zu\n", l_else);
-
-        if (!gen_block(cg, e->as.conditional.then_body, e->as.conditional.then_count))
-            return false;
-        fprintf(cg->out, "    jmp     .L%zu\n", l_end);
-
-        fprintf(cg->out, ".L%zu:\n", l_else);
-        if (!gen_block(cg, e->as.conditional.else_body, e->as.conditional.else_count))
-            return false;
-
-        fprintf(cg->out, ".L%zu:\n", l_end);
-        return true;
-    }
-
-    case ExprWhile: {
-        size_t l_top = next_label(cg);
-        size_t l_end = next_label(cg);
-
-        fprintf(cg->out, ".L%zu:\n", l_top);
-        if (!gen_expr(cg, e->as.while_loop.cond)) return false;
-        fprintf(cg->out, "    testq   %%rax, %%rax\n");
-        fprintf(cg->out, "    je      .L%zu\n", l_end);
-
-        if (!gen_block(cg, e->as.while_loop.body, e->as.while_loop.body_count))
-            return false;
-        fprintf(cg->out, "    jmp     .L%zu\n", l_top);
-        fprintf(cg->out, ".L%zu:\n", l_end);
-        return true;
-    }
-
-    // O epílogo fica no rótulo do fim da função, para não duplicá-lo a cada `return`.
-    case ExprReturn:
-        if (e->as.ret.value) {
-            if (!gen_expr(cg, e->as.ret.value)) return false;
-        } else {
-            fprintf(cg->out, "    xorl    %%eax, %%eax\n");
+            if (!gen_block(cg, e->as.while_loop.body, e->as.while_loop.body_count)) return false;
+            fprintf(cg->out, "    jmp     .L%zu\n", l_top);
+            fprintf(cg->out, ".L%zu:\n", l_end);
+            return true;
         }
-        fprintf(cg->out, "    jmp     .Lret%zu\n", cg->return_label);
-        return true;
 
-    // --- ainda não suportados ----------------------------------------------------------------
+        // O epílogo fica no rótulo do fim da função, para não duplicá-lo a cada `return`.
+        case ExprReturn:
+            if (e->as.ret.value) {
+                if (!gen_expr(cg, e->as.ret.value)) return false;
+            } else {
+                fprintf(cg->out, "    xorl    %%eax, %%eax\n");
+            }
+            fprintf(cg->out, "    jmp     .Lret%zu\n", cg->return_label);
+            return true;
 
-    case ExprFloat:
-        unsupported(cg, e, "literais de ponto flutuante");
-        return false;
+            // --- ainda não suportados ----------------------------------------------------------------
 
-    // Só faz sentido à direita de uma declaração de array, e ali quem o emite é `ExprVarDecl`.
-    // Chegar aqui significa um literal solto, que a linguagem ainda não aceita como valor.
-    case ExprArrayLit:
-        unsupported(cg, e, "literal de array fora de uma declaração");
-        return false;
+        case ExprFloat: unsupported(cg, e, "literais de ponto flutuante"); return false;
 
-    case ExprFuncDecl:
-        unsupported(cg, e, "função aninhada");
-        return false;
+        // Só faz sentido à direita de uma declaração de array, e ali quem o emite é `ExprVarDecl`.
+        // Chegar aqui significa um literal solto, que a linguagem ainda não aceita como valor.
+        case ExprArrayLit:
+            unsupported(cg, e, "literal de array fora de uma declaração");
+            return false;
+
+        case ExprFuncDecl: unsupported(cg, e, "função aninhada"); return false;
     }
 
     return false;
@@ -680,8 +671,8 @@ static bool gen_function(Codegen *cg, const Expr *e) {
     cg->return_label = next_label(cg);
     cg->stack_depth  = 0;
 
-    size_t slots = e->as.func_decl.param_count
-                 + count_slots(e->as.func_decl.body, e->as.func_decl.body_count);
+    size_t slots =
+        e->as.func_decl.param_count + count_slots(e->as.func_decl.body, e->as.func_decl.body_count);
 
     // Alinhado em 16 pela ABI; os 32 bytes iniciais do frame ficam reservados.
     size_t frame = ((slots * SLOT_SIZE + 32) + 15) & ~(size_t)15;
@@ -707,7 +698,7 @@ static bool gen_function(Codegen *cg, const Expr *e) {
     // o seu slot logo na entrada.
     for (size_t i = 0; i < e->as.func_decl.param_count; i++) {
         const Expr *p = e->as.func_decl.params[i];
-        int offset;
+        int         offset;
         if (!declare_local(cg, p, &offset)) {
             tarm_error_at(cg->diag, p->line, p->col, "parâmetro duplicado");
             return false;
@@ -715,8 +706,7 @@ static bool gen_function(Codegen *cg, const Expr *e) {
         fprintf(cg->out, "    movq    %s, %d(%%rbp)\n", ARG_REGS[i], offset);
     }
 
-    if (!gen_block(cg, e->as.func_decl.body, e->as.func_decl.body_count))
-        return false;
+    if (!gen_block(cg, e->as.func_decl.body, e->as.func_decl.body_count)) return false;
 
     // Queda pelo fim sem `return`: devolve 0.
     fprintf(cg->out, "    xorl    %%eax, %%eax\n");
@@ -764,9 +754,9 @@ bool tarm_codegen_generate(Codegen *cg, Expr **program, size_t count) {
         Expr *ident_expr = e->as.var_decl.obj;
 
         size_t label_id;
-        if (!tarm_symbol_table_declare_global(&cg->symbols,
-                                              ident_expr->as.identifier.name,  ident_expr->as.identifier.len,
-                                               e->as.var_decl.type, SLOT_SIZE, &label_id)) {
+        if (!tarm_symbol_table_declare_global(&cg->symbols, ident_expr->as.identifier.name,
+                                              ident_expr->as.identifier.len, e->as.var_decl.type,
+                                              SLOT_SIZE, &label_id)) {
             tarm_error_at(cg->diag, e->line, e->col, "variável global duplicada: '%.*s'",
                           (int)ident_expr->as.identifier.len, ident_expr->as.identifier.name);
             return false;
@@ -774,7 +764,8 @@ bool tarm_codegen_generate(Codegen *cg, Expr **program, size_t count) {
 
         // A coerção implícita pode ter envolvido o literal num `ExprCast`; o valor está embaixo.
         const Expr *init = e->as.var_decl.initializer;
-        while (init && init->kind == ExprCast) init = init->as.cast.operand;
+        while (init && init->kind == ExprCast)
+            init = init->as.cast.operand;
 
         // Uma String global guarda o **ponteiro** para o objeto do literal, emitido em `.rodata`
         // logo antes — daí a troca de seção no meio da lista de globais.
@@ -790,8 +781,8 @@ bool tarm_codegen_generate(Codegen *cg, Expr **program, size_t count) {
         long long initial = 0;
         if (init) {
             switch (init->kind) {
-                case ExprInteger: initial = (long long)init->as.integer.value;          break;
-                case ExprBool:    initial = init->as.boolean.value ? 1 : 0;             break;
+                case ExprInteger: initial = (long long)init->as.integer.value; break;
+                case ExprBool:    initial = init->as.boolean.value ? 1 : 0; break;
                 case ExprChar:    initial = (long long)(unsigned char)init->as.char_lit.value; break;
                 default:
                     tarm_error_at(cg->diag, e->line, e->col,

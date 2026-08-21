@@ -53,9 +53,13 @@ typedef enum{
 /// @brief Operador de um nó `ExprBinary`.
 /// @note A precedência **não** está aqui: ela é decidida pela cadeia de produções do Parser
 /// (`parse_equality` → `parse_relational` → ...), que já entrega a árvore com o agrupamento certo.
+/// @note `OpNone` é a exceção: nenhuma expressão o produz e ele nunca chega a um nó. É o sentinela
+/// interno com que `parse_assignment` distingue o `=` simples de uma atribuição composta — ver
+/// docs/parser.md#atribuições-compostas-como-açúcar.
 typedef enum {
     OpAdd, OpSub, OpMul, OpDiv,
     OpEq, OpGt, OpLt, OpGtEq, OpLtEq,
+    OpNone ///< Sentinela do Parser ("nenhum composto"); os `switch` sobre operadores não o tratam.
 } BinaryOp;
 
 typedef struct Expr Expr;
