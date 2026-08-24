@@ -38,7 +38,7 @@ extern char **environ;
 // Arquivos de runtime montados e linkados junto com o programa. Cada um vira um `.o` temporário
 // próprio; ver `load_runtime_assembly`.
 static const char *RUNTIME_SOURCES[] = {
-    "object.s", "alloc.s", "audio.s", "io.s", "string.s", "takeoff.s",
+    "error.s", "object.s", "alloc.s", "audio.s", "io.s", "string.s", "takeoff.s",
 };
 #define RUNTIME_SOURCE_COUNT (sizeof RUNTIME_SOURCES / sizeof *RUNTIME_SOURCES)
 

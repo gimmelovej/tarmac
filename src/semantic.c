@@ -341,9 +341,10 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
         }
         // O resultado de `v[i]` é o **elemento**: o mesmo tipo base, com a forma de array desligada.
         //
-        // A faixa só é conferida quando o índice é literal — é o único caso em que o valor se conhece
-        // aqui. Com índice variável, nada garante que ele caia dentro do array em tempo de execução:
-        // ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
+        // A faixa é conferida aqui só quando o índice é literal — é o único caso em que o valor se
+        // conhece antes de o programa rodar, e o único em que dá para recusar na compilação. Nos
+        // demais, quem confere é o código emitido pela Codegen, antes de cada acesso.
+        // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
         case ExprIndex: {
             DataType base_t = check_expr(an, &e->as.index.base);
             expect_type(an, &e->as.index.index, tarm_datatype_of(Int), "índice");
@@ -360,15 +361,25 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
             }
             Expr *index = e->as.index.index;
             if (index->kind == ExprInteger) {
-                if (index->as.integer.value > (int64_t)(base_t.array_len - 1) ||
+                if (index->as.integer.value >= (int64_t)(base_t.array_len) ||
                     index->as.integer.value < 0) {
                     tarm_error_at(an->diag, e->line, e->col, "elemento fora de alcance");
                     result = tarm_datatype_of(Void);
                     break;
                 }
-            } else if (index->kind == ExprIdentifier) {
-                check_expr(an, &index);
+            } else if (index->kind == ExprIdentifier || index->kind == ExprBinary) {
+                DataType expr = check_expr(an, &index);
+                if (expr.type != Int && expr.type != Int64) {
+                    tarm_error_at(an->diag, e->line, e->col, "índice não-inteiro não permitido");
+                    result = tarm_datatype_of(Void);
+                    break;
+                }
+            } else {
+                tarm_error_at(an->diag, e->line, e->col, "índice de tipo não permitido");
+                result = tarm_datatype_of(Void);
+                break;
             }
+
             result           = base_t;
             result.is_array  = false;
             result.array_len = 0;
@@ -418,6 +429,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
                 case ExprIndex: {
 
                     Expr *base = target->as.index.base;
+                    Expr *idx  = target->as.index.index;
 
                     if (!base->as.identifier.name || !base->as.identifier.len) {
                         tarm_error_at(an->diag, base->line, base->col,
@@ -437,6 +449,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
                         break;
                     }
 
+
                     if (!sym->type.is_array) {
                         tarm_error_at(an->diag, base->line, base->col,
                                       "base de atribuição não é um array");
@@ -446,6 +459,27 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
                     DataType target_t = sym->type;
                     expect_type(an, &e->as.assign.value, target_t, "atribuição");
                     result = target_t;
+
+                    if (idx->kind == ExprInteger) {
+                        if (idx->as.integer.value >= (int64_t)(target_t.array_len) ||
+                            idx->as.integer.value < 0) {
+                            tarm_error_at(an->diag, e->line, e->col, "elemento fora de alcance");
+                            result = tarm_datatype_of(Void);
+                            break;
+                        }
+                    } else if (idx->kind == ExprIdentifier || idx->kind == ExprBinary) {
+                        DataType expr = check_expr(an, &idx);
+                        if (expr.type != Int && expr.type != Int64) {
+                            tarm_error_at(an->diag, e->line, e->col,
+                                          "índice não-inteiro não permitido");
+                            result = tarm_datatype_of(Void);
+                            break;
+                        }
+                    } else {
+                        tarm_error_at(an->diag, e->line, e->col, "índice de tipo não permitido");
+                        result = tarm_datatype_of(Void);
+                        break;
+                    }
 
 
                     break;
