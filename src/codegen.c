@@ -412,10 +412,14 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             return true;
         }
         // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`, resolvido
-        // aqui mesmo e emitido como um deslocamento constante. Com índice variável entra o modo de
-        // endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação em
-        // tempo de execução sem instrução extra. A escala é o `size_of` do elemento, e o processador só
-        // aceita 1, 2, 4 ou 8; todos os tipos da linguagem cabem nesse conjunto.
+        // aqui mesmo e emitido como um deslocamento constante — a faixa já foi conferida na análise
+        // semântica, então nada é verificado em tempo de execução. Com índice calculado entra o modo
+        // de endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação
+        // sem instrução extra; a escala é o `size_of` do elemento, e o processador só aceita 1, 2, 4
+        // ou 8, valores que cobrem todos os tipos da linguagem.
+        //
+        // A verificação de faixa usa `jae`, e não `jge`: sendo **sem sinal**, um índice negativo vira
+        // um número enorme e cai no mesmo `>= array_len`. Uma comparação cobre os dois limites.
         //
         // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
         case ExprIndex: {
@@ -428,22 +432,28 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                               (int)base->as.identifier.len, base->as.identifier.name);
                 return false;
             }
-            size_t esz = sym->type.size_of;
+            size_t esz  = sym->type.size_of;
+            size_t arrl = sym->type.array_len;
 
-            if (e->as.index.index->kind == ExprInteger) {
-                int64_t i = e->as.index.index->as.integer.value;
+            Expr *idx = e->as.index.index;
+
+            if (idx->kind == ExprInteger) {
+                int64_t i = idx->as.integer.value;
                 fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n", mov_load(esz),
                         sym->offset + (int)(i * (int64_t)esz));
                 return true;
-            } else if (e->as.index.index->kind == ExprIdentifier) {
-                if (!gen_expr(cg, e->as.index.index)) return false;
+            } else if (idx->kind == ExprIdentifier || idx->kind == ExprBinary) {
+                if (!gen_expr(cg, idx)) return false;
+                fprintf(cg->out, "    cmpq    $%zu, %%rax\n", arrl);
+                fprintf(cg->out, "    jae     fatal_error_\n");
                 fprintf(cg->out, "    %-7s %d(%%rbp, %%rax, %zu), %%rax\n", mov_load(esz),
                         sym->offset, esz);
                 return true;
             }
 
-            tarm_error_at(cg->diag, base->line, base->col, "tipo não tratado em array: '%.*s'",
-                          (int)base->as.identifier.len, base->as.identifier.name);
+            tarm_error_at(cg->diag, e->as.index.index->line, e->as.index.index->col,
+                          "indexação desconhecida: '%.*s'", (int)base->as.identifier.len,
+                          base->as.identifier.name);
             return false;
         }
         // O lado esquerdo é empilhado enquanto o direito é avaliado — avaliar direto em %rcx perderia
@@ -478,23 +488,27 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                 // termina em `%rax`. Daí o par push/pop em volta: o índice vai para `%rcx`, o valor volta
                 // para `%rax`, e a escrita usa o endereçamento escalado.
                 case ExprIndex: {
-                    Expr *base  = target->as.index.base;
-                    Expr *index = target->as.index.index;
+                    Expr *base = target->as.index.base;
+                    Expr *idx  = target->as.index.index;
 
                     const Symbol *sym = tarm_symbol_table_find(
                         &cg->symbols, base->as.identifier.name, base->as.identifier.len);
                     if (!sym) return false;
 
-                    size_t esz = sym->type.size_of;
+                    size_t esz  = sym->type.size_of;
+                    size_t arrl = sym->type.array_len;
 
-                    if (index->kind == ExprInteger) {
-                        int el_offset = sym->offset + (int)(esz * (size_t)index->as.integer.value);
+                    if (idx->kind == ExprInteger) {
+                        int el_offset = sym->offset + (int)(esz * (size_t)idx->as.integer.value);
                         fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n", mov_suffix(esz),
                                 reg_a(esz), el_offset);
                         return true;
-                    } else if (index->kind == ExprIdentifier) {
+                    } else if (idx->kind == ExprIdentifier || idx->kind == ExprBinary) {
+
                         emit_push(cg, "%rax");
-                        gen_expr(cg, index);
+                        if (!gen_expr(cg, idx)) return false;
+                        fprintf(cg->out, "    cmpq    $%zu, %%rax\n", arrl);
+                        fprintf(cg->out, "    jae     fatal_error_\n");
                         fprintf(cg->out, "    movq    %%rax, %%rcx\n");
                         emit_pop(cg, "%rax");
                         fprintf(cg->out, "    mov%s    %s, %d(%%rbp, %%rcx, %zu)\n",

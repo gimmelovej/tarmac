@@ -18,12 +18,10 @@ leitura e escrita. O que resta, na ordem em que faz sentido atacar:
 
 | # | Marca | Item | Onde |
 |---|---|---|---|
-| 1 | 🔴 | **Verificação de faixa em tempo de execução.** Com índice variável, nada garante que ele caia dentro do array: `v[i]` com `i` fora da faixa lê memória vizinha, e `v[i] = x` a corrompe. A checagem estática só alcança o índice literal, e ficou insuficiente no momento em que o índice variável passou a ser aceito. Emitir a comparação antes do acesso, com um desvio para uma rotina de aborto no runtime. | `codegen.c`, runtime |
-| 2 | 🟡 | **Índice como expressão** (`v[i + 1]`): hoje só literal ou variável simples são reconhecidos, e o resto vira "tipo não tratado em array". O caminho geral é avaliar a expressão do índice para um registrador e usá-lo no modo escalado, que já está lá. | `codegen.c` |
-| 3 | 🟡 | **Inicializador menor que o declarado** é aceito em silêncio: `int[3] v = {1}` deixa os dois últimos elementos com o que houvesse na stack. Zerar o resto, ou recusar. | `semantic.c`, `codegen.c` |
-| 4 | 🟡 | **Array global**, em `.data`, com o literal virando uma sequência de `.quad`. | `codegen.c` |
-| 5 | 🟢 | **Array como parâmetro e retorno** de função — passa a exigir uma decisão sobre passagem por referência. | todas as etapas |
-| 6 | 🟢 | **`len()` sobre array**, hoje só disponível para `string`. | `function_table.c` |
+| 1 | 🟡 | **Inicializador menor que o declarado** é aceito em silêncio: `int[3] v = {1}` deixa os dois últimos elementos com o que houvesse na stack. Zerar o resto, ou recusar. | `semantic.c`, `codegen.c` |
+| 2 | 🟡 | **Array global**, em `.data`, com o literal virando uma sequência de `.quad`. | `codegen.c` |
+| 3 | 🟢 | **Array como parâmetro e retorno** de função — passa a exigir uma decisão sobre passagem por referência. | todas as etapas |
+| 4 | 🟢 | **`len()` sobre array**, hoje só disponível para `string`. | `function_table.c` |
 
 ## Patch — geral
 
@@ -32,6 +30,12 @@ leitura e escrita. O que resta, na ordem em que faz sentido atacar:
 | 🟡 | **`ast_list_commit` não distingue** lista vazia de falha de alocação: devolve NULL nos dois casos, com `*out_count` já preenchido. | `ast.c` |
 | 🟡 | **Alinhamento da arena**: o tamanho é arredondado para 16, mas o cabeçalho de 24 bytes desloca `data`, então os ponteiros saem alinhados a 8. | `arena.c` |
 | 🟡 | **Estouro em literal inteiro**: `parse_int_slice` acumula em `int64_t` e dá a volta em silêncio. | `parser.c` |
+
+## Runtime
+
+| Marca | Item | Nota |
+|---|---|---|
+| 🟡 | **Aborto com causa e posição** | `fatal_error_` hoje escreve uma mensagem única e sai com 1, sem dizer o que falhou nem onde. Levar o motivo (e, se possível, a linha do `.tm`) até a rotina |
 
 ## Novidades da linguagem
 

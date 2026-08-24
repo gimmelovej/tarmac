@@ -133,8 +133,9 @@ int function main()
     print(iniciais[3]);
     print("\n");
 
-    // Com índice literal a faixa é conferida em tempo de compilação (`medidas[3]` seria recusado).
-    // Com índice variável ainda não há verificação em tempo de execução — ver o TODO.md.
+    // A faixa é conferida nos dois momentos: com índice literal, na compilação (`medidas[3]` seria
+    // recusado); com índice calculado, por uma comparação emitida antes do acesso, que aborta o
+    // programa em vez de ler ou escrever fora do array.
 
     // --- MENOS UNÁRIO ---------------------------------------------------------------------------
     //

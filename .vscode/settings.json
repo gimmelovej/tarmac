@@ -1,4 +1,7 @@
 {
-  "files.associations": { "*.h": "c" },
-  "editor.formatOnSave": true
+  "files.associations": {
+    "*.h": "c"
+  },
+  "editor.formatOnSave": true,
+  "files.insertFinalNewline": true
 }
