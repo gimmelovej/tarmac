@@ -309,14 +309,28 @@ conversão implícita que estreite.
 
 | Limitação | Efeito |
 |---|---|
-| **Sem verificação de faixa em tempo de execução** | com índice variável nada garante que ele caia dentro do array: `v[i]` com `i = 9` num `int[2]` lê memória vizinha, e a escrita corrompe |
-| **Índice só literal ou variável simples** | `v[i + 1]` é recusado — falta o caminho geral, que avalia qualquer expressão para um registrador |
 | **Menos elementos que o declarado** | `int[3] v = {1}` é aceito, e os dois últimos ficam com o que houvesse na stack |
 | **Array como parâmetro, retorno ou global** | não reconhecido |
 
-A verificação de faixa em tempo de execução é a mais importante das quatro, e ficou mais urgente
-justamente por causa do índice variável: enquanto só havia índice literal, a checagem estática
-cobria todos os casos. Está no topo do [`TODO.md`](../TODO.md).
+### Faixa conferida nos dois momentos
+
+A checagem acompanha o que dá para saber em cada ponto:
+
+| Índice | Onde a faixa é conferida | Custo em tempo de execução |
+|---|---|---|
+| literal (`v[2]`) | análise semântica | nenhum — não se emite verificação |
+| calculado (`v[i]`, `v[i + 1]`) | código emitido antes do acesso | um `cmpq` e um `jae` |
+
+Com índice calculado, a Codegen emite a comparação contra `array_len` e desvia para `fatal_error_`
+(ver [`docs/runtime.md`](runtime.md#aborto-de-execucao)), que escreve em *stderr* e encerra com
+código 1. Vale na **leitura e na escrita** — a escrita é a que mais importa, porque um índice fora
+da faixa ali não devolve lixo, corrompe o frame.
+
+O salto é `jae`, e não `jge`, de propósito: sendo comparação **sem sinal**, um índice negativo vira
+um número enorme e cai no mesmo `>= array_len`. Uma comparação só cobre os dois limites, sem um
+segundo teste contra zero.
+
+O que sobra está no [`TODO.md`](../TODO.md).
 
 ---
 

@@ -20,6 +20,7 @@ Todas as rotinas seguem a **System V AMD64 ABI**: argumentos inteiros/ponteiro e
 ```
 runtime/
 ├── takeoff.s   # _start (ponto de entrada; monta argc/argv/envp e chama main)
+├── error.s     # fatal_error_ (aborto de execução; mensagem em stderr e exit 1)
 ├── object.s    # tarm_obj_new, tarm_obj_len, tarm_buf_str (objetos com header)
 ├── object.inc  # layout do header (OBJ_DATA/OBJ_LEN/OBJ_CAP/OBJ_SIZE), incluído pelos .s que precisam
 ├── alloc.s     # tarm_mmap_alloc, tarm_brk_alloc, tarm_mmap_free, tarm_brk_free
@@ -61,13 +62,13 @@ destrói `%rcx`.
 | Nº | Nome | Onde | Para quê |
 |---|---|---|---|
 | 0 | `read` | `io.s` | ler o conteúdo de um arquivo em `read_buf` |
-| 1 | `write` | `io.s`, `audio.s` | toda saída: `print_*` e as amostras de `emit_note` |
+| 1 | `write` | `io.s`, `audio.s`, `error.s` | toda saída: `print_*`, as amostras de `emit_note` e a mensagem de aborto |
 | 2 | `open` | `io.s` | abrir o arquivo de `read_buf` |
 | 3 | `close` | `io.s` | fechar o descritor depois da leitura |
 | 9 | `mmap` | `alloc.s` | `mmap_alloc`: mapeamento anônimo independente |
 | 11 | `munmap` | `alloc.s` | `mmap_free` |
 | 12 | `brk` | `alloc.s` | `brk_alloc`/`brk_free`: mover o *program break* |
-| 60 | `exit` | `takeoff.s` | encerrar o processo com o retorno de `main` |
+| 60 | `exit` | `takeoff.s`, `error.s` | encerrar o processo: com o retorno de `main`, ou com 1 num aborto |
 
 Não há libc no binário gerado: tudo que o programa faz com o sistema passa por esta tabela.
 
@@ -95,6 +96,35 @@ via `mmap`/`munmap`, liberadas por ponteiro e tamanho, sem afetar as demais.
 
 `tarm_obj_new` aloca pelo `brk`, então todo objeto (String/Buffer criado em tempo de execução)
 segue essa disciplina.
+
+---
+
+<a id="aborto-de-execucao"></a>
+
+## Aborto de execução
+
+`fatal_error_` (`error.s`) escreve uma mensagem em *stderr* e encerra o processo com código 1. **Não
+retorna** — quem desvia para lá não precisa preservar registrador nem alinhar a pilha.
+
+O tratamento é **genérico de propósito**, nesta primeira versão: uma mensagem só, sem dizer o que
+falhou nem onde. O que se ganha já é o essencial — o programa para em vez de continuar sobre memória
+inválida. Uma versão com causa e posição virá depois.
+
+Hoje o único desvio para lá é a **verificação de faixa de array** emitida pela geração de código,
+quando o índice é uma variável:
+
+```
+cmpq    $3, %rax          # 3 = array_len
+jge     fatal_error_
+movslq  -48(%rbp, %rax, 4), %rax
+```
+
+Com índice **literal**, a faixa continua sendo conferida em tempo de compilação, e nenhum código de
+verificação é emitido — o custo em tempo de execução só existe onde o valor não pode ser conhecido
+antes.
+
+O símbolo foge do prefixo `tarm_` das demais rotinas da runtime; o sufixo `_` é o que o separa do
+espaço de nomes das funções do usuário, que a Codegen prefixa com `tarm_`.
 
 ---
 

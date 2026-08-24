@@ -30,10 +30,10 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > não mais o complemento de dois em decimal.
 >
 > 🚧 **Arrays (novo, em desenvolvimento).** Declarar, inicializar, ler e atribuir já funcionam, com
-> índice **literal ou variável** — o que torna array utilizável dentro de um `while`. O que falta
-> para fechar o recurso está em [Arrays](#arrays-novo-e-em-desenvolvimento) e no
-> [`TODO.md`](TODO.md); o mais importante é que **não há verificação de faixa em tempo de
-> execução**.
+> índice literal, variável ou calculado (`v[i + 1]`). A **faixa é conferida sempre**: na compilação
+> quando o índice é literal, e em tempo de execução nos demais casos — na leitura e na escrita —,
+> abortando o programa em vez de ler ou corromper memória vizinha. O que falta para fechar o recurso
+> está em [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md).
 
 ---
 
@@ -74,7 +74,7 @@ tarmac/
 | `include/codegen.h`, `src/codegen.c` | AST validada → *assembly* x86-64 (AT&T, System V AMD64). |
 | `include/arena.h`, `src/arena.c` | Alocador de arena: blocos sequenciais para os nós da AST, liberados de uma vez só. |
 | `include/driver.h`, `src/driver.c` | Orquestra o pipeline e monta/linka o binário com `as` + `ld`, sem shell. |
-| `runtime/*.s` | Implementações das funções nativas e o `_start`. Ver [`docs/runtime.md`](docs/runtime.md). |
+| `runtime/*.s` | Implementações das funções nativas, o `_start` e o aborto de execução. Ver [`docs/runtime.md`](docs/runtime.md). |
 | `src/main.c` | Ponto de entrada do executável `tarm`. |
 
 ---
@@ -131,24 +131,24 @@ while i < 3 {
 ```
 
 O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler e atribuir um
-elemento por índice literal ou variável, e a checagem em tempo de compilação do tipo de cada
-elemento e — para índice literal — da faixa. Cada elemento é acessado na largura do seu tipo, então
-`int[3]` (12 bytes) e `char[4]` (4 bytes) convivem sem se sobrepor; com índice variável o endereço
-sai do modo escalado do x86, sem instrução de multiplicação.
+elemento por índice literal, variável ou calculado, a checagem do tipo de cada elemento, e a **faixa
+conferida sempre** — na compilação com índice literal, em tempo de execução nos demais casos.
+Cada elemento é acessado na largura do seu tipo, então `int[3]` (12 bytes) e `char[4]` (4 bytes)
+convivem sem se sobrepor; com índice variável o endereço sai do modo escalado do x86, sem instrução
+de multiplicação.
 
 O que **ainda não**, e vale saber antes de usar:
 
 | Limitação | Efeito prático |
 |---|---|
-| **Sem verificação de faixa em tempo de execução** | com índice variável nada garante que ele caia dentro do array: ler devolve memória vizinha, escrever a corrompe |
-| Índice só literal ou variável simples | `v[i + 1]` é recusado; falta o caminho geral de expressão |
 | Inicializador menor que o declarado | `int[3] v = {1}` é aceito, e o resto fica com o que houvesse na stack |
 | Sem array como parâmetro, retorno ou global | não reconhecido |
 
-A verificação de faixa em tempo de execução é a mais importante — e ficou mais urgente com o índice
-variável, porque enquanto só havia literal a checagem estática cobria todos os casos. Está no topo
-do [`TODO.md`](TODO.md), e o detalhamento técnico em
-[`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento).
+A faixa é conferida nos dois momentos: com índice **literal**, na análise semântica, sem emitir
+código nenhum; com índice **calculado**, por uma comparação antes do acesso — na leitura e na
+escrita — que desvia para `fatal_error_` e aborta o programa. O detalhamento técnico está em
+[`docs/parser.md`](docs/parser.md#arrays-novo-e-em-desenvolvimento), e o que sobra, no
+[`TODO.md`](TODO.md).
 
 > Dois recursos do [Tarmac em C++](https://github.com/gimmelovej/tarmac-cpp) não vieram para este
 > port: o tipo **`buffer`** (e a nativa `read_buf` que o produzia) e o **ponto flutuante** na
@@ -226,8 +226,8 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Array | Checagem estática de faixa | 🟢 Implementado | com índice literal, fora de `[0, array_len)` é recusado |
 | Array | Base da atribuição precisa ser array | 🟢 Implementado | `x[5] = 9` num escalar é recusado na análise semântica |
 | Tipos | Tamanho de elemento com fonte única | 🟢 Implementado | `tarm_symbol_table_data_size` é a única tabela; o Parser a alcança por `tarm_datatype_of` |
-| Array | Verificação de faixa em tempo de execução | 🔴 Ausente | com índice variável nada garante que ele caia dentro do array: ler devolve memória vizinha, escrever a corrompe |
-| Array | Índice como expressão (`v[i + 1]`) | 🟡 Recusado | só literal ou variável simples; falta o caminho geral |
+| Array | Verificação de faixa em tempo de execução | 🟢 Implementado | na leitura **e** na escrita: `cmpq`/`jae` antes do acesso, com desvio para `fatal_error_`. Sendo comparação sem sinal, a mesma instrução cobre o índice negativo |
+| Array | Índice como expressão (`v[i + 1]`) | 🟢 Implementado | qualquer expressão que resolva para `int` serve; o valor é avaliado para um registrador e entra no modo escalado |
 | Array | Inicializador menor que o declarado | 🟡 Aceito em silêncio | `int[3] v = {1}` deixa o resto com o que houvesse na stack |
 | Array | Como parâmetro, retorno ou variável global | ⚪ Não iniciado | — |
 | AST | Nós da árvore: união etiquetada por `ExprKind`, com o tipo resolvido em `type` e a posição de origem em cada nó | 🟢 Implementado | nomes e textos são fatias do buffer, como nos tokens; ver [`docs/architecture.md`](docs/architecture.md#a-ast-como-união-etiquetada) |
@@ -249,6 +249,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Runtime | `print_*`, `atoi`, `strlen`, objetos com header, `mmap`/`brk`, `emit_note`, `_start` | 🟢 Implementada | ver [`docs/runtime.md`](docs/runtime.md) |
 | Runtime | Impressão de `int64` em toda a faixa | 🟢 Implementado | `_format_uint` divide em 64 bits; antes truncava a partir de 2³² |
 | Runtime | Impressão de número negativo | 🟢 Implementado | `_format_int` guarda o sinal, formata o módulo com `_format_uint` e escreve o `-` na frente; `INT64_MIN` inclusive |
+| Runtime | Aborto de execução (`fatal_error_`, `runtime/error.s`) | 🟡 Genérico | mensagem única em *stderr* e `exit(1)`, sem causa nem posição; ver [`docs/runtime.md`](docs/runtime.md#aborto-de-execucao) |
 | Runtime | `read_buf` e o tipo `buffer` | ⚪ Fora deste port | a rotina continua em `runtime/io.s`, sem quem a chame |
 | Driver | Pipeline completo, com barreira de diagnóstico entre etapas | 🟢 Implementado | todos os recursos são declarados antes do primeiro `goto`, então a limpeza nunca vê variável indeterminada |
 | Driver | Montagem e link com `as` + `ld`, sem `gcc` e sem shell | 🟢 Implementado | `posix_spawnp` + `waitpid` com código de saída conferido; `.o` temporários removidos mesmo em caso de falha |

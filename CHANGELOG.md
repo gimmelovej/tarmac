@@ -9,10 +9,11 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
-## [Não lançado]
+## [0.4.0-alpha] - 2026-08-24
 
-**Atribuições compostas** na linguagem: `+=`, `-=`, `*=` e `/=`, em variável e em elemento de
-array.
+**Atribuições compostas** na linguagem (`+=`, `-=`, `*=`, `/=`) e o primeiro **tratamento de erro em
+tempo de execução**: a faixa de um array passa a ser conferida antes de cada acesso calculado, na
+leitura e na escrita, abortando o programa em vez de ler ou corromper memória vizinha.
 
 ```tarmac
 total += soma(2, 3);
@@ -21,6 +22,24 @@ x /= 2 + 2;             // o lado direito agrupa inteiro antes: `x = x / 4`
 ```
 
 ### Adicionado
+- **Verificação de faixa em tempo de execução**, na **leitura e na escrita**. Com índice calculado,
+  a geração de código emite um `cmpq` contra `array_len` e um `jae` para `fatal_error_` antes do
+  acesso; com índice **literal** nada é emitido, porque a análise semântica já conferiu — o custo em
+  tempo de execução só existe onde o valor não podia ser conhecido antes.
+  O salto é `jae`, e não `jge`, de propósito: sendo comparação **sem sinal**, um índice negativo
+  vira um número enorme e cai no mesmo `>= array_len`, então uma comparação só cobre os dois limites
+  sem um segundo teste contra zero. A escrita é o caminho que mais importa — um índice fora da faixa
+  ali não devolve lixo, corrompe o frame.
+- **Índice como expressão** (`v[i + 1]`): qualquer expressão que resolva para `int` serve. O valor é
+  avaliado para um registrador e entra no modo de endereçamento escalado, com a mesma verificação de
+  faixa dos demais índices calculados.
+- **`runtime/error.s`**, com `fatal_error_`: escreve uma mensagem em *stderr* e encerra o processo
+  com código 1. É um tratamento **genérico** nesta primeira versão — uma mensagem só, sem causa nem
+  posição —, mas já garante que o programa pare em vez de continuar sobre memória inválida. Uma
+  versão com contexto virá depois; ver [`docs/runtime.md`](docs/runtime.md#aborto-de-execucao).
+- A análise semântica passou a **recusar índice de tipo não permitido**: um índice que não resolva
+  para `int`, e uma forma de índice que a geração de código não saiba tratar, viram erro com
+  posição em vez de chegarem ao assembly.
 - **Atribuições compostas** (`+=`, `-=`, `*=`, `/=`), como **açúcar sintático**: não há nó próprio.
   `parse_assignment` desfaz `a += b` em `a = a + b` — um `ExprAssign` cujo valor é um `ExprBinary`
   comum — então a análise semântica e a geração de código não conhecem construção nova, e as regras
