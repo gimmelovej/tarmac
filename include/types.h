@@ -43,7 +43,6 @@ typedef enum {
     KwIf,
     KwElse,
     KwWhile,
-    KwFunction,
     KwDeclaration,
 
     // Pontuação e operadores

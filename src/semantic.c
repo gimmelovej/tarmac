@@ -648,12 +648,14 @@ static void declare_functions(SemanticAnalyzer *an, Expr **program, size_t count
             params[p]        = decl ? decl->as.var_decl.type.type : Void;
         }
 
+        Expr *obj = e->as.func_decl.obj;
+
         const char *reason = NULL;
-        if (!tarm_function_table_declare(an->functions, e->as.func_decl.name,
-                                         e->as.func_decl.name_len, e->as.func_decl.ret_type.type,
+        if (!tarm_function_table_declare(an->functions, obj->as.identifier.name,
+                                         obj->as.identifier.len, e->as.func_decl.ret_type.type,
                                          params, e->as.func_decl.param_count, &reason))
             tarm_error_at(an->diag, e->line, e->col, "função '%.*s': %s",
-                          (int)e->as.func_decl.name_len, e->as.func_decl.name,
+                          (int)obj->as.identifier.len, obj->as.identifier.name,
                           reason ? reason : "não foi possível registrar");
     }
 }

@@ -696,8 +696,10 @@ static bool gen_function(Codegen *cg, const Expr *e) {
         return false;
     }
 
+    Expr *obj = e->as.func_decl.obj;
+
     char symbol[128];
-    mangle(e, e->as.func_decl.name, e->as.func_decl.name_len, symbol, sizeof symbol);
+    mangle(e, obj->as.identifier.name, obj->as.identifier.len, symbol, sizeof symbol);
 
     fprintf(cg->out, "\n    .text\n");
     fprintf(cg->out, "    .globl  %s\n", symbol);

@@ -121,7 +121,6 @@ static TokenKind check_keyword(const char *text, size_t len) {
         {"if", KwIf},
         {"while", KwWhile},
         {"else", KwElse},
-        {"function", KwFunction},
         {"return", KwReturn},
         // `true`/`false` são palavras-chave, não identificadores: reconhecê-las aqui poupa o
         // Parser de comparar texto para descobrir que um identificador era um literal booleano.
@@ -435,7 +434,6 @@ const char *tarm_token_kind_name(TokenKind kind) {
         case KwIf:           return "KwIf";
         case KwElse:         return "KwElse";
         case KwWhile:        return "KwWhile";
-        case KwFunction:     return "KwFunction";
         case KwDeclaration:  return "KwDeclaration";
         case KwTrue:         return "KwTrue";
         case KwFalse:        return "KwFalse";

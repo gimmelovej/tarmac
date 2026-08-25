@@ -11,8 +11,7 @@
 // Declarações adiantadas: a cadeia de precedência é mutuamente recursiva (`primary` volta a
 // `expression` pelos parênteses), então não há ordem de definição que dispense os protótipos.
 static Expr *parse_top_level(Parser *ps);
-static Expr *parse_function_declaration(Parser *ps);
-static Expr *parse_global_declaration(Parser *ps);
+static Expr *parse_scope_declaration(Parser *ps);
 static bool  parse_body_block(Parser *ps, Expr ***out_items, size_t *out_count);
 static Expr *parse_declaration(Parser *ps);
 static Expr *parse_statement(Parser *ps);
@@ -25,6 +24,7 @@ static Expr *parse_additive(Parser *ps);
 static Expr *parse_multiplicative(Parser *ps);
 static Expr *parse_unary(Parser *ps);
 static Expr *parse_postfix(Parser *ps);
+static Expr *parse_identifier_expr(Parser *ps);
 static Expr *parse_primary(Parser *ps);
 static bool  parse_type(Parser *ps, DataType *out);
 
@@ -195,12 +195,11 @@ static bool parse_arg_list(Parser *ps, ExprList *args) {
 // Ver docs/parser.md#nível-superior.
 // ------------------------------------------------------------------------------------------------
 
-// Todo item de nível superior começa por um tipo: ou é declaração de função (tipo de retorno
-// seguido de `function`), ou é variável global.
+// Todo item de nível superior começa por um tipo — o de retorno, se for função; o da variável, se
+// for global. Qual das duas é, quem decide é `parse_scope_declaration`.
 static Expr *parse_top_level(Parser *ps) {
     if (match_type_kw(ps)) {
-        if (check(ps, KwFunction)) return parse_function_declaration(ps);
-        return parse_global_declaration(ps);
+        return parse_scope_declaration(ps);
     }
 
     Token t = peek(ps);
@@ -211,74 +210,79 @@ static Expr *parse_top_level(Parser *ps) {
     return NULL;
 }
 
-// O tipo de retorno já foi consumido por `parse_top_level` e é lido de volta via `previous`.
-static Expr *parse_function_declaration(Parser *ps) {
+// Declaração de nível superior: função ou variável global. O tipo já foi consumido por
+// `parse_top_level` e é lido de volta via `previous`; o nome vem em seguida, e é o **caractere
+// depois dele** que decide qual das duas construções está sendo declarada.
+//
+//   int soma(int a, int b) { ... }   →  `(` depois do nome  →  ExprFuncDecl
+//   int total = 7;                   →  qualquer outra coisa →  ExprVarDecl (frame Global)
+//
+// As duas compartilham o cabeçalho — tipo e nome — porque na linguagem elas de fato começam igual.
+// Foi o que permitiu a palavra-chave `function` sair: sem ela, o que distingue uma função de uma
+// global é a mesma coisa que distingue em C, o parêntese.
+//
+// Ver docs/parser.md#nível-superior.
+static Expr *parse_scope_declaration(Parser *ps) {
     Token    type_tok = previous(ps);
     DataType ret_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
 
-    advance(ps); // consome KwFunction
-
-    if (!expect(ps, Identifier, "o nome da função após 'function'")) return NULL;
-    Token name = previous(ps);
-
-    if (!expect(ps, LParen, "'(' após o nome da função")) return NULL;
-
-    ExprList params = {0};
-    if (!check(ps, RParen)) {
-        do {
-            Expr *p = parse_declaration(ps);
-            if (!p || !ast_list_push(&params, p)) {
-                ast_list_free(&params);
-                return NULL;
-            }
-        } while (match(ps, Comma));
-    }
-    if (!expect(ps, RParen, "')' após os parâmetros")) {
-        ast_list_free(&params);
-        return NULL;
-    }
-
-    Expr *e = ast_expr_new(ps->arena, ExprFuncDecl, type_tok.line, type_tok.col);
-    if (!e) {
-        ast_list_free(&params);
-        return NULL;
-    }
-
-    e->as.func_decl.name     = name.start;
-    e->as.func_decl.name_len = name.len;
-    e->as.func_decl.ret_type = ret_type;
-    e->as.func_decl.params   = ast_list_commit(ps->arena, &params, &e->as.func_decl.param_count);
-
-    if (!parse_body_block(ps, &e->as.func_decl.body, &e->as.func_decl.body_count)) return NULL;
-
-    return e;
-}
-
-// Gêmea de `parse_declaration`, e de propósito: a forma da declaração é a mesma, o que muda é o
-// `frame` gravado no nó — `Global` vira dado estático, `Local` vira slot na stack. É esse campo
-// que a análise semântica e a codegen vão consultar, não a produção que criou o nó.
-static Expr *parse_global_declaration(Parser *ps) {
-    Token    type_tok = previous(ps);
-    DataType var_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
-
-    Expr *identifier_expr = parse_postfix(ps);
+    Expr *identifier_expr = parse_identifier_expr(ps);
     if (!identifier_expr) return NULL;
 
-    Expr *init = NULL;
-    if (match(ps, Equal)) {
-        init = parse_statement(ps);
-        if (!init) return NULL;
+    // A partir daqui, os dois ramos: função à esquerda do `(`, global no caso contrário.
+    if (check(ps, LParen)) {
+        advance(ps);
+        ExprList params = {0};
+
+        if (!check(ps, RParen)) {
+            do {
+                Expr *p = parse_declaration(ps);
+                if (!p || !ast_list_push(&params, p)) {
+                    ast_list_free(&params);
+                    return NULL;
+                }
+            } while (match(ps, Comma));
+        }
+
+        if (!expect(ps, RParen, "')' após os parâmetros")) {
+            ast_list_free(&params);
+            return NULL;
+        }
+
+        Expr *e = ast_expr_new(ps->arena, ExprFuncDecl, type_tok.line, type_tok.col);
+        if (!e) {
+            ast_list_free(&params);
+            return NULL;
+        }
+
+        e->as.func_decl.obj      = identifier_expr;
+        e->as.func_decl.ret_type = ret_type;
+        e->as.func_decl.params = ast_list_commit(ps->arena, &params, &e->as.func_decl.param_count);
+
+        if (!parse_body_block(ps, &e->as.func_decl.body, &e->as.func_decl.body_count)) return NULL;
+        return e;
+    } else {
+        DataType var_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
+
+        Expr *init = NULL;
+        if (match(ps, Equal)) {
+            init = parse_statement(ps);
+            if (!init) return NULL;
+        }
+
+        Expr *e = ast_expr_new(ps->arena, ExprVarDecl, type_tok.line, type_tok.col);
+        if (!e) return NULL;
+
+        e->as.var_decl.obj         = identifier_expr;
+        e->as.var_decl.type        = var_type;
+        e->as.var_decl.initializer = init;
+        e->as.var_decl.frame       = Global;
+        return e;
     }
 
-    Expr *e = ast_expr_new(ps->arena, ExprVarDecl, type_tok.line, type_tok.col);
-    if (!e) return NULL;
-
-    e->as.var_decl.obj         = identifier_expr;
-    e->as.var_decl.type        = var_type;
-    e->as.var_decl.initializer = init;
-    e->as.var_decl.frame       = Global;
-    return e;
+    return NULL;
 }
+
 
 // Bloco `{ ... }`. Devolve a lista pelos parâmetros de saída porque um bloco não é um nó — é o
 // conteúdo de um (corpo de função, ramo de `if`, corpo de `while`).
@@ -605,6 +609,7 @@ static Expr *parse_unary(Parser *ps) {
     return parse_postfix(ps);
 }
 
+
 // Sufixos que se aplicam a um valor já reconhecido: indexação (`v[i]`) e chamada de método
 // (`x.len()`). No método, o receptor entra como `args[0]`, seguido dos argumentos explícitos — é
 // essa convenção que a análise semântica e a codegen esperam.
@@ -660,6 +665,23 @@ static Expr *parse_postfix(Parser *ps) {
         }
     }
     return receiver;
+}
+
+// Consome um `Identifier` e o devolve como nó, sem olhar o que vem depois.
+//
+// É deliberadamente mais burro que `parse_postfix`: no cabeçalho de uma declaração, o `(` que segue
+// o nome abre a lista de **parâmetros**, não uma chamada, e o `[` abre o tamanho de um array, não
+// uma indexação. Deixar a cadeia de expressão ler esse trecho faria as duas coisas serem
+// confundidas.
+static Expr *parse_identifier_expr(Parser *ps) {
+    if (!expect(ps, Identifier, "um identificador")) return NULL;
+    Token t = previous(ps);
+
+    Expr *e = ast_expr_new(ps->arena, ExprIdentifier, t.line, t.col);
+    if (!e) return NULL;
+    e->as.identifier.name = t.start;
+    e->as.identifier.len  = t.len;
+    return e;
 }
 
 // Folhas da árvore: literais, identificador, chamada e o agrupamento por parênteses.

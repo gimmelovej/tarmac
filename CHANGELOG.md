@@ -9,6 +9,48 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.5.0-alpha] - 2026-08-25
+
+A palavra-chave **`function` saiu da linguagem**. Uma função passa a se declarar como em C — tipo de
+retorno, nome e a lista de parâmetros entre parênteses —, e o que a distingue de uma variável global
+é o `(` depois do nome.
+
+```tarmac
+int soma(int a, int b) {    // antes: int function soma(int a, int b)
+    return a + b;
+}
+
+int total = 7;              // mesmo cabeçalho, sem o `(` — vira global
+```
+
+### Mudanças incompatíveis
+- **`function` deixou de ser palavra-chave.** Todo `.tm` escrito para uma versão anterior precisa
+  perder o `function` das declarações; mantê-lo agora dá `esperado ';' ao final da instrução`,
+  porque o que sobrou é um identificador solto onde se esperava o fim da declaração.
+  A palavra-chave existia para dizer à gramática algo que o parêntese já dizia: como o cabeçalho de
+  uma função e o de uma global são idênticos até o nome, bastava olhar um caractere adiante para
+  separar as duas. Era trabalho cobrado de quem escreve o programa para poupar trabalho do Parser —
+  e o Parser não precisava dele.
+
+### Alterado
+- `parse_function_declaration` e `parse_global_declaration` viraram uma produção só,
+  **`parse_scope_declaration`**: ela lê o cabeçalho comum (tipo, já consumido por `parse_top_level`,
+  e nome) e só então decide o ramo. O código que duplicava a leitura do cabeçalho desapareceu junto.
+- **`func_decl.obj`**: o nome da função deixou de ser um par `const char * + uint32_t` no nó e passou
+  a ser um `ExprIdentifier`, como em `var_decl.obj`. É o que permite às duas declarações
+  compartilharem a leitura do cabeçalho, e de quebra o nome ganha posição própria de origem.
+  A análise semântica e a geração de código leem o nome por esse nó ao formar o símbolo.
+- Novo auxiliar **`parse_identifier_expr`**, deliberadamente mais restrito que `parse_postfix`: num
+  cabeçalho de declaração, o `(` que segue o nome abre parâmetros e o `[` abre um tamanho — deixar a
+  cadeia de expressão ler esse trecho confundiria os dois casos com chamada e indexação.
+- `example.tm`, os exemplos do [`README.md`](README.md) e de [`docs/parser.md`](docs/parser.md), e o
+  teste de fumaça do CI passaram para a sintaxe nova.
+
+### Removido
+- `KwFunction` do `TokenKind` (`include/types.h`), a entrada `"function"` da tabela de palavras-
+  chave do Lexer e o caso correspondente em `tarm_token_kind_name`. `function` volta a ser um
+  identificador comum.
+
 ## [0.4.0-alpha] - 2026-08-24
 
 **Atribuições compostas** na linguagem (`+=`, `-=`, `*=`, `/=`) e o primeiro **tratamento de erro em

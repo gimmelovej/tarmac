@@ -44,7 +44,7 @@ localmente antes de abrir o PR:
 
 ```bash
 cmake --build build
-printf 'int function main(){ print("ci ok\\n"); return 0; }\n' > /tmp/smoke.tm
+printf 'int main(){ print("ci ok\\n"); return 0; }\n' > /tmp/smoke.tm
 ./build/tarm /tmp/smoke.tm && /tmp/smoke     # deve imprimir: ci ok
 ./build/tarm example.tm && ./example
 ```
