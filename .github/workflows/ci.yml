@@ -46,7 +46,7 @@ jobs:
       - name: Smoke test (compilar + rodar um .tm)
         run: |
           set -euo pipefail
-          printf 'int function main(){ print("ci ok\\n"); return 0; }\n' > "$RUNNER_TEMP/smoke.tm"
+          printf 'int main(){ print("ci ok\\n"); return 0; }\n' > "$RUNNER_TEMP/smoke.tm"
           ./build/tarm "$RUNNER_TEMP/smoke.tm"
           out="$("$RUNNER_TEMP/smoke")"
           echo "saída do binário: '$out'"

@@ -2,9 +2,9 @@
 // example.tm — Passeio pelos recursos da linguagem Tarmac reconhecidos pelo compilador em C.
 // Compile e execute com: ./build/tarm example.tm && ./example
 //
-// Destaques desta versão: ATRIBUIÇÕES COMPOSTAS (+=, -=, *=, /=), além do MENOS UNÁRIO e dos
-// ARRAYS (novo, em desenvolvimento) — ver os blocos no fim de main() e as limitações conhecidas
-// em docs/parser.md#arrays-novo-e-em-desenvolvimento.
+// Destaque desta versão: a palavra-chave `function` SAIU. Uma função agora se declara como em C —
+// `int soma(int a, int b) { ... }` —, e o que a distingue de uma variável global é o parêntese
+// depois do nome. Ver docs/parser.md#nível-superior.
 // ================================================================================================
 
 // Variáveis globais: ficam fora de qualquer função e pedem um literal constante, porque viram dado
@@ -12,26 +12,27 @@
 string titulo = "== Tarmac em C: passeio pelos recursos ==\n";
 int total = 0;
 
-// Função com parâmetro: o tipo de retorno vem antes da palavra-chave `function`.
-int function dobro(int n)
+// Função com parâmetro: tipo de retorno, nome e a lista entre parênteses — o mesmo cabeçalho de
+// uma variável global, até o `(` decidir qual das duas é.
+int dobro(int n)
 {
     return n * 2;
 }
 
 // Vários parâmetros: a quantidade e o tipo de cada argumento são conferidos por posição.
-int function soma(int a, int b)
+int soma(int a, int b)
 {
     return a + b;
 }
 
 // Sem parâmetros. O nome `x` se repete em outras funções sem conflito: cada uma tem seu escopo.
-int function resposta()
+int resposta()
 {
     int x = 42;
     return x;
 }
 
-int function main()
+int main()
 {
     print(titulo);
 
