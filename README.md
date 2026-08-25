@@ -21,6 +21,11 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > compila e roda. Já dá para escrever programas de verdade — funções com parâmetros, globais,
 > `if`/`else`, `while`, strings, chamadas nativas e alocação.
 >
+> 🔤 **A palavra-chave `function` saiu.** Uma função passa a se declarar como em C —
+> `int soma(int a, int b) { ... }` —, e o que a distingue de uma variável global é o parêntese
+> depois do nome. É uma **mudança incompatível**: todo `.tm` escrito antes precisa perder o
+> `function`.
+>
 > ➕ **Atribuições compostas.** `+=`, `-=`, `*=` e `/=` já funcionam, em variável e em elemento de
 > array — como açúcar, desfeito no Parser: `a += b` compila exatamente como `a = a + b`, com as
 > mesmas regras de tipo e coerção.
@@ -86,11 +91,11 @@ linguagem **C**: poucos recursos, mas com controle direto sobre memória e execu
 termina com `;`, todo código executável vive dentro de uma função, e o ponto de entrada é `main`:
 
 ```tarmac
-int function soma(int a, int b) {
+int soma(int a, int b) {
     return a + b;
 }
 
-int function main() {
+int main() {
     int resultado = soma(3, 4);
     print(resultado);   // imprime: 7
     return 0;
@@ -214,6 +219,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Lexer | Posição (linha/coluna) e recuperação de erro | 🟢 Implementado | linha e coluna saem do par congelado no início do lexema; lexema desconhecido vira `Invalid` e a varredura segue |
 | Lexer | Decodificação de escapes | 🟢 Implementado | o Lexer **valida** e guarda a fatia crua; quem decodifica é o Parser (caractere) e a Codegen, que repassa a string ao `as` — ver [`docs/parser.md`](docs/parser.md#literais-e-escapes) |
 | Parser | Gramática completa: nível superior, funções, globais, blocos, `if`/`else`, `while`, `return`, precedência de expressão, chamadas e métodos | 🟢 Implementado | ver [`docs/parser.md`](docs/parser.md) para a gramática produção a produção |
+| Parser | Declaração de nível superior sem a palavra-chave `function` | 🟢 Implementado | função e global compartilham a produção `parse_scope_declaration`; é o `(` depois do nome que as separa — ver [`docs/parser.md`](docs/parser.md#nível-superior) |
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
 | Parser | Menos unário (`-x`) | 🟢 Implementado | como açúcar: o literal é dobrado no próprio nó, e `-x` vira `0 - x`; um `ExprUnary` dedicado está previsto |

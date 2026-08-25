@@ -17,9 +17,9 @@ O Parser é um *parser descendente recursivo* clássico, com duas cadeias de pro
 ```
 tarm_parser_program
  └─ parse_top_level
-     └─ <tipo> ...
-         ├─ seguido de "function"  → parse_function_declaration
-         └─ seguido de <nome>      → parse_global_declaration
+     └─ <tipo> <nome> ...     → parse_scope_declaration
+         ├─ seguido de "("    → ExprFuncDecl
+         └─ qualquer outra    → ExprVarDecl (frame Global)
 
 parse_declaration
  ├─ <tipo> <nome> [= ...]  → ExprVarDecl (frame Local)
@@ -40,19 +40,31 @@ do `Parser`: cursor, `Diagnostics` e arena.
 ## Nível superior
 
 Todo item de nível superior precisa começar por uma palavra-chave de tipo (`int`, `int64`, `float`,
-`char`, `string`, `bool`) — que é ou o tipo de retorno de uma `function`, ou o tipo de uma variável
+`char`, `string`, `bool`) — que é ou o tipo de retorno de uma função, ou o tipo de uma variável
 global. Uma instrução solta sem esse prefixo (uma chamada direta, por exemplo) é rejeitada com erro
 de sintaxe, citando o que apareceu no lugar.
 
-O tipo é consumido por `match_type_kw` **antes** de se saber qual das duas produções vem; as duas o
-recuperam com `previous(ps)`. É também de lá que sai a posição (`line`/`col`) do nó, para que o erro
-aponte o começo da declaração e não o meio dela.
+O tipo é consumido por `match_type_kw` **antes** de se saber qual das duas construções vem, e
+`parse_scope_declaration` o recupera com `previous(ps)`. É também de lá que sai a posição
+(`line`/`col`) do nó, para que o erro aponte o começo da declaração e não o meio dela.
+
+Logo depois do tipo vem o nome, lido por `parse_identifier_expr` — e é só então, olhando o
+**caractere seguinte**, que se sabe o que está sendo declarado: `(` abre uma lista de parâmetros e o
+nó vira `ExprFuncDecl`; qualquer outra coisa faz dele um `ExprVarDecl` de frame `Global`.
 
 ```tarmac
-int function main() { ... }   // declaração de função
+int main() { ... }            // declaração de função
 int contador = 0;             // variável global
 print("oi");                  // ERRO: não começa com um tipo
 ```
+
+> **A palavra-chave `function` saiu na `0.5.0-alpha`.** Antes, a declaração era
+> `int function main() { ... }`, e era o token `function` que separava as duas produções — que até
+> então eram duas funções distintas, `parse_function_declaration` e `parse_global_declaration`. Como
+> o cabeçalho das duas é idêntico (tipo e nome), a palavra-chave era o único trabalho que a gramática
+> exigia do programador para dizer algo que o `(` já dizia. As duas produções viraram uma só,
+> `parse_scope_declaration`, e a linguagem ficou mais perto do C — ao custo de uma **quebra de
+> compatibilidade**: todo `.tm` anterior precisa perder o `function`.
 
 ---
 
@@ -75,7 +87,7 @@ variável vive:
 
 | Onde | Produção | `frame` | Destino previsto |
 |---|---|---|---|
-| Fora de qualquer função | `parse_global_declaration` | `Global` | dado estático em `.data` |
+| Fora de qualquer função | `parse_scope_declaration` | `Global` | dado estático em `.data` |
 | Dentro de uma função | `parse_declaration` | `Local` | slot na stack |
 
 As duas produções são quase idênticas de propósito: o que muda é só o `frame`, e é ele que a
@@ -83,7 +95,7 @@ análise semântica e a geração de código vão consultar para decidir o trata
 no `enum` (`types.h`) mas ainda não é produzido por ninguém.
 
 Parâmetros de função passam pela mesma `parse_declaration`, e daí saem como nós `ExprVarDecl` —
-o que também significa que um parâmetro com inicializador (`int function f(int a = 1)`) é aceito
+o que também significa que um parâmetro com inicializador (`int f(int a = 1)`) é aceito
 pela sintaxe, ainda que não tenha significado.
 
 ---

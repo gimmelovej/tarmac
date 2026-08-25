@@ -121,10 +121,13 @@ struct Expr {
             Expr       *value;
         } assign;
 
+        /// `obj` é um nó `ExprIdentifier` com o nome da função — a mesma forma de `var_decl.obj`,
+        /// e pela mesma razão: as duas declarações compartilham o cabeçalho (tipo e nome) e só se
+        /// separam no que vem depois.
         /// Parâmetros são nós `ExprVarDecl` (mesma produção de uma declaração local); `body` é o
         /// bloco da função. Os dois vetores vivem na arena, montados por `ast_list_commit`.
         struct {
-            const char *name; uint32_t name_len;
+            Expr *obj;
             DataType    ret_type;
             Expr      **params; size_t param_count;
             Expr      **body;   size_t body_count;
