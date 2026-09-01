@@ -318,9 +318,10 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
         case ExprBool:    result = tarm_datatype_of(Bool); break;
         case ExprString:  result = tarm_datatype_of(String); break;
         case ExprChar:    result = tarm_datatype_of(Char); break;
-        // Um literal de array não tem tipo próprio: quem o dá é a declaração à esquerda, que conhece o
-        // tipo e o tamanho reservados. Aqui os elementos só são percorridos para que erros dentro deles
-        // apareçam mesmo quando o literal está solto; a checagem de verdade é a de `ExprVarDecl`.
+        // Um literal de array não tem tipo próprio: quem o dá é a declaração à esquerda, que
+        // conhece o tipo e o tamanho reservados. Aqui os elementos só são percorridos para que
+        // erros dentro deles apareçam mesmo quando o literal está solto; a checagem de verdade é a
+        // de `ExprVarDecl`.
         case ExprArrayLit:
             for (size_t i = 0; i < e->as.array_lit.count; i++)
                 check_expr(an, &e->as.array_lit.elements[i]);
@@ -339,7 +340,8 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
             }
             break;
         }
-        // O resultado de `v[i]` é o **elemento**: o mesmo tipo base, com a forma de array desligada.
+        // O resultado de `v[i]` é o **elemento**: o mesmo tipo base, com a forma de array
+        // desligada.
         //
         // A faixa é conferida aqui só quando o índice é literal — é o único caso em que o valor se
         // conhece antes de o programa rodar, e o único em que dá para recusar na compilação. Nos
@@ -360,6 +362,7 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
                 break;
             }
             Expr *index = e->as.index.index;
+
             if (index->kind == ExprInteger) {
                 if (index->as.integer.value >= (int64_t)(base_t.array_len) ||
                     index->as.integer.value < 0) {
@@ -421,11 +424,12 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
                     result = target_t;
                     break;
                 }
-                // Atribuir a um elemento (`v[0] = 9`). O tipo esperado do lado direito é o da variável
-                // indexada, com a coerção implícita valendo como em qualquer atribuição.
+                // Atribuir a um elemento (`v[0] = 9`). O tipo esperado do lado direito é o da
+                // variável indexada, com a coerção implícita valendo como em qualquer atribuição.
                 //
-                // A base precisa ser um array — sem esse teste, `x[5] = 9` num escalar viraria uma escrita
-                // 20 bytes além do slot. A faixa do índice, essa, continua conferida só na leitura.
+                // A base precisa ser um array — sem esse teste, `x[5] = 9` num escalar viraria uma
+                // escrita 20 bytes além do slot. Índice literal fora da faixa é recusado aqui, como
+                // na leitura; o calculado fica para a verificação em tempo de execução.
                 case ExprIndex: {
 
                     Expr *base = target->as.index.base;
@@ -497,9 +501,9 @@ static DataType check_expr(SemanticAnalyzer *an, Expr **slot) {
             Expr    *target   = e->as.var_decl.obj;
             Expr    *init     = e->as.var_decl.initializer;
 
-            // Array com inicializador: a contagem e o tipo de cada elemento são conferidos contra o
-            // que foi declarado, e o literal herda o tipo completo — é dele que a Codegen tira o passo
-            // entre os elementos.
+            // Array com inicializador: a contagem e o tipo de cada elemento são conferidos
+            // contra o que foi declarado, e o literal herda o tipo completo — é dele que a Codegen
+            // tira o passo entre os elementos.
             if (init && declared.is_array && init->kind == ExprArrayLit) {
                 if (init->as.array_lit.count > declared.array_len)
                     tarm_error_at(an->diag, init->line, init->col,

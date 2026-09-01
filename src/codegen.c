@@ -151,9 +151,9 @@ static bool var_operand(Codegen *cg, const char *name, uint32_t name_len, char *
     const Symbol *sym = tarm_symbol_table_find(&cg->symbols, name, name_len);
     if (!sym) return false;
 
-    if (sym->is_global)
+    if (sym->is_global) {
         snprintf(buf, buf_size, "globobj_%zu(%%rip)", sym->label_id);
-    else
+    } else
         snprintf(buf, buf_size, "%d(%%rbp)", sym->offset);
 
     return true;
@@ -301,7 +301,8 @@ static const char *call_symbol(Codegen *cg, const Expr *e, char *buf, size_t buf
         return buf;
     }
 
-    // Nativa com despacho por tipo (`print`): é o tipo já anotado no argumento que escolhe a rotina.
+    // Nativa com despacho por tipo (`print`): é o tipo já anotado no argumento que escolhe a
+    // rotina.
     BaseType dispatch = Void;
     if (sig->dispatch_param >= 0 && (size_t)sig->dispatch_param < e->as.call.arg_count)
         dispatch = e->as.call.args[sig->dispatch_param]->type.type;
@@ -411,15 +412,16 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             fprintf(cg->out, "    movq    %s, %%rax\n", operand);
             return true;
         }
-        // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`, resolvido
-        // aqui mesmo e emitido como um deslocamento constante — a faixa já foi conferida na análise
-        // semântica, então nada é verificado em tempo de execução. Com índice calculado entra o modo
-        // de endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz a multiplicação
-        // sem instrução extra; a escala é o `size_of` do elemento, e o processador só aceita 1, 2, 4
-        // ou 8, valores que cobrem todos os tipos da linguagem.
+        // Indexação, por dois caminhos. Com índice literal o endereço é `slot + i * size_of`,
+        // resolvido aqui mesmo e emitido como um deslocamento constante — a faixa já foi conferida
+        // na análise semântica, então nada é verificado em tempo de execução. Com índice calculado
+        // entra o modo de endereçamento escalado do x86 — `offset(%rbp, %rax, escala)` —, que faz
+        // a multiplicação sem instrução extra; a escala é o `size_of` do elemento, e o processador
+        // só aceita 1, 2, 4 ou 8, valores que cobrem todos os tipos da linguagem.
         //
-        // A verificação de faixa usa `jae`, e não `jge`: sendo **sem sinal**, um índice negativo vira
-        // um número enorme e cai no mesmo `>= array_len`. Uma comparação cobre os dois limites.
+        // A verificação de faixa usa `jae`, e não `jge`: sendo **sem sinal**, um índice negativo
+        // vira um número enorme e cai no mesmo `>= array_len`. Uma comparação cobre os dois
+        // limites.
         //
         // Ver docs/parser.md#arrays-novo-e-em-desenvolvimento.
         case ExprIndex: {
@@ -432,20 +434,31 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                               (int)base->as.identifier.len, base->as.identifier.name);
                 return false;
             }
-            size_t esz  = sym->type.size_of;
-            size_t arrl = sym->type.array_len;
-
-            Expr *idx = e->as.index.index;
+            size_t esz = sym->type.size_of;
+            Expr  *idx = e->as.index.index;
 
             if (idx->kind == ExprInteger) {
                 int64_t i = idx->as.integer.value;
+                if (sym->is_global) {
+                    if (!gen_expr(cg, idx)) return false;
+                    fprintf(cg->out, "    leaq    globobj_%zu(%%rip), %%rdx\n", sym->label_id);
+                    fprintf(cg->out, "    %-7s    (%%rdx, %%rax, %zu), %%rax\n", mov_load(esz),
+                            esz);
+                    return true;
+                }
                 fprintf(cg->out, "    %-7s %d(%%rbp), %%rax\n", mov_load(esz),
                         sym->offset + (int)(i * (int64_t)esz));
                 return true;
             } else if (idx->kind == ExprIdentifier || idx->kind == ExprBinary) {
                 if (!gen_expr(cg, idx)) return false;
-                fprintf(cg->out, "    cmpq    $%zu, %%rax\n", arrl);
+                fprintf(cg->out, "    cmpq    $%zu, %%rax\n", sym->type.array_len);
                 fprintf(cg->out, "    jae     fatal_error_\n");
+                if (sym->is_global) {
+                    fprintf(cg->out, "    leaq    globobj_%zu(%%rip), %%rdx\n", sym->label_id);
+                    fprintf(cg->out, "    %-7s    (%%rdx, %%rax, %zu), %%rax\n", mov_load(esz),
+                            esz);
+                    return true;
+                }
                 fprintf(cg->out, "    %-7s %d(%%rbp, %%rax, %zu), %%rax\n", mov_load(esz),
                         sym->offset, esz);
                 return true;
@@ -456,8 +469,8 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                           base->as.identifier.name);
             return false;
         }
-        // O lado esquerdo é empilhado enquanto o direito é avaliado — avaliar direto em %rcx perderia
-        // o valor assim que o lado direito usasse o registrador.
+        // O lado esquerdo é empilhado enquanto o direito é avaliado — avaliar direto em %rcx
+        // perderia o valor assim que o lado direito usasse o registrador.
         case ExprBinary: {
             if (!gen_expr(cg, e->as.binary.left)) return false;
             emit_push(cg, "%rax");
@@ -468,9 +481,9 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
         }
         case ExprAssign: {
             Expr *target = e->as.assign.target;
-            if (!gen_expr(cg, e->as.assign.value)) return false;
             switch (target->kind) {
                 case ExprIdentifier: {
+                    if (!gen_expr(cg, e->as.assign.value)) return false;
                     if (!var_operand(cg, target->as.identifier.name, target->as.identifier.len,
                                      operand, sizeof operand)) {
                         tarm_error_at(cg->diag, target->line, target->col,
@@ -481,12 +494,11 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                     fprintf(cg->out, "    movq    %%rax, %s\n", operand);
                     return true;
                 }
-                // Atribuir a um elemento: o valor já está em `%rax` (gerado acima, antes do `switch`), e o
-                // que falta é o endereço — a mesma conta da leitura, com a escrita na largura do elemento.
-                //
-                // Com índice variável, o valor a gravar precisa sobreviver à avaliação do índice, que também
-                // termina em `%rax`. Daí o par push/pop em volta: o índice vai para `%rcx`, o valor volta
-                // para `%rax`, e a escrita usa o endereçamento escalado.
+                // Atribuir a um elemento: a mesma conta de endereço da leitura, com a escrita na
+                // largura do elemento. Índice e valor terminam ambos em `%rax`, então cada ramo
+                // gera o valor no seu momento; quando os dois precisam conviver, o índice é
+                // empilhado enquanto o valor é avaliado, e a escrita sai com o índice em `%rcx` e
+                // o valor em `%rax`, no endereçamento escalado.
                 case ExprIndex: {
                     Expr *base = target->as.index.base;
                     Expr *idx  = target->as.index.index;
@@ -499,18 +511,39 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                     size_t arrl = sym->type.array_len;
 
                     if (idx->kind == ExprInteger) {
+                        if (sym->is_global) {
+                            if (!gen_expr(cg, idx)) return false;
+                            emit_push(cg, "%rax");
+                            if (!gen_expr(cg, e->as.assign.value)) return false;
+                            emit_pop(cg, "%rcx");
+                            fprintf(cg->out, "    cmpq    $%zu, %%rcx\n", arrl);
+                            fprintf(cg->out, "    jae     fatal_error_\n");
+                            fprintf(cg->out, "    leaq    globobj_%zu(%%rip), %%rdx\n",
+                                    sym->label_id);
+                            fprintf(cg->out, "    mov%s   %s, (%%rdx, %%rcx, %zu)\n",
+                                    mov_suffix(esz), reg_a(esz), esz);
+                            return true;
+                        }
+                        if (!gen_expr(cg, e->as.assign.value)) return false;
                         int el_offset = sym->offset + (int)(esz * (size_t)idx->as.integer.value);
                         fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n", mov_suffix(esz),
                                 reg_a(esz), el_offset);
                         return true;
                     } else if (idx->kind == ExprIdentifier || idx->kind == ExprBinary) {
-
-                        emit_push(cg, "%rax");
                         if (!gen_expr(cg, idx)) return false;
-                        fprintf(cg->out, "    cmpq    $%zu, %%rax\n", arrl);
+                        emit_push(cg, "%rax");
+                        if (!gen_expr(cg, e->as.assign.value)) return false;
+                        emit_pop(cg, "%rcx");
+
+                        fprintf(cg->out, "    cmpq    $%zu, %%rcx\n", arrl);
                         fprintf(cg->out, "    jae     fatal_error_\n");
-                        fprintf(cg->out, "    movq    %%rax, %%rcx\n");
-                        emit_pop(cg, "%rax");
+                        if (sym->is_global) {
+                            fprintf(cg->out, "    leaq    globobj_%zu(%%rip), %%rdx\n",
+                                    sym->label_id);
+                            fprintf(cg->out, "    mov%s   %s, (%%rdx, %%rcx, %zu)\n",
+                                    mov_suffix(esz), reg_a(esz), esz);
+                            return true;
+                        }
                         fprintf(cg->out, "    mov%s    %s, %d(%%rbp, %%rcx, %zu)\n",
                                 mov_suffix(esz), reg_a(esz), sym->offset, esz);
                         return true;
@@ -531,6 +564,7 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             Expr *ident_expr = e->as.var_decl.obj;
             if (e->as.var_decl.frame == Global) {
                 if (!e->as.var_decl.initializer) return true;
+
                 if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
                 if (!var_operand(cg, ident_expr->as.identifier.name, ident_expr->as.identifier.len,
                                  operand, sizeof operand))
@@ -548,21 +582,33 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
                 return false;
             }
 
-            if (e->as.var_decl.initializer) {
-                // Array: cada elemento é avaliado e gravado no seu offset, sem passar pelo `movq` do
-                // fim — um array não cabe em `%rax`. O passo é `size_of` do elemento.
-                if (e->as.var_decl.type.is_array) {
-                    Expr  *init        = e->as.var_decl.initializer;
-                    int    offset_pool = offset;
-                    size_t esz         = e->as.var_decl.type.size_of;
+            // Array: cada elemento é avaliado e gravado no seu offset, sem passar pelo `movq` do
+            // fim — um array não cabe em `%rax`. O passo é `size_of` do elemento.
+            if (e->as.var_decl.type.is_array) {
+                int    offset_pool = offset;
+                size_t esz         = e->as.var_decl.type.size_of;
+                size_t bytes       = esz * (size_t)e->as.var_decl.type.array_len;
+                size_t slots       = (bytes + SLOT_SIZE - 1) / SLOT_SIZE;
+
+                fprintf(cg->out, "    xorl    %%eax, %%eax\n");
+
+                for (size_t s = 0; s < slots; s++)
+                    fprintf(cg->out, "    movq    %%rax, %d(%%rbp)\n",
+                            offset + (int)(s * SLOT_SIZE));
+
+                if (e->as.var_decl.initializer) {
+                    Expr *init = e->as.var_decl.initializer;
                     for (size_t i = 0; i < init->as.array_lit.count; i++) {
                         if (!gen_expr(cg, init->as.array_lit.elements[i])) return false;
                         fprintf(cg->out, "    mov%s    %s, %d(%%rbp)\n", mov_suffix(esz),
                                 reg_a(esz), offset_pool);
                         offset_pool += (int)esz;
                     }
-                    return true;
                 }
+                return true;
+            }
+
+            if (e->as.var_decl.initializer) {
                 if (!gen_expr(cg, e->as.var_decl.initializer)) return false;
             } else {
                 fprintf(cg->out, "    xorl    %%eax, %%eax\n");
@@ -587,8 +633,8 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             }
             return false;
         }
-        // O objeto vai para `.rodata` e o que fica em `%rax` é o ponteiro para o header — o mesmo que
-        // uma String alocada em tempo de execução entregaria.
+        // O objeto vai para `.rodata` e o que fica em `%rax` é o ponteiro para o header — o mesmo
+        // que uma String alocada em tempo de execução entregaria.
         case ExprString: {
             size_t id = emit_string_object(cg, e->as.string_lit.text, e->as.string_lit.len);
             fprintf(cg->out, "    .text\n");
@@ -604,7 +650,7 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
         case ExprMethod:
             return gen_call(cg, e);
 
-            // --- instruções de fluxo -----------------------------------------------------------------
+            // --- instruções de fluxo -------------------------------------------------------------
 
         case ExprConditional: {
             size_t l_else = next_label(cg);
@@ -651,7 +697,7 @@ static bool gen_expr(Codegen *cg, const Expr *e) {
             fprintf(cg->out, "    jmp     .Lret%zu\n", cg->return_label);
             return true;
 
-            // --- ainda não suportados ----------------------------------------------------------------
+            // --- ainda não suportados ------------------------------------------------------------
 
         case ExprFloat: unsupported(cg, e, "literais de ponto flutuante"); return false;
 
@@ -778,24 +824,71 @@ bool tarm_codegen_generate(Codegen *cg, Expr **program, size_t count) {
             return false;
         }
 
+        const DataType *t   = &e->as.var_decl.type;
+        size_t          esz = t->size_of;
         // A coerção implícita pode ter envolvido o literal num `ExprCast`; o valor está embaixo.
         const Expr *init = e->as.var_decl.initializer;
-        while (init && init->kind == ExprCast)
-            init = init->as.cast.operand;
 
-        // Uma String global guarda o **ponteiro** para o objeto do literal, emitido em `.rodata`
-        // logo antes — daí a troca de seção no meio da lista de globais.
-        if (init && init->kind == ExprString) {
-            size_t id = emit_string_object(cg, init->as.string_lit.text, init->as.string_lit.len);
-            fprintf(cg->out, "    .data\n");
-            fprintf(cg->out, "    .align  8\n");
-            fprintf(cg->out, "globobj_%zu:\n", label_id);
-            fprintf(cg->out, "    .quad   strobj_%zu\n", id);
-            continue;
-        }
-
-        long long initial = 0;
         if (init) {
+            while (init->kind == ExprCast)
+                init = init->as.cast.operand;
+
+            // Uma String global guarda o **ponteiro** para o objeto do literal, emitido em
+            // `.rodata` logo antes — daí a troca de seção no meio da lista de globais.
+            if (init->kind == ExprString) {
+                size_t id =
+                    emit_string_object(cg, init->as.string_lit.text, init->as.string_lit.len);
+                fprintf(cg->out, "    .data\n");
+                fprintf(cg->out, "    .align  8\n");
+                fprintf(cg->out, "globobj_%zu:\n", label_id);
+                fprintf(cg->out, "    .quad   strobj_%zu\n", id);
+                continue;
+            } else if (init->kind == ExprArrayLit) {
+                const char *directive = esz == 1   ? ".byte"
+                                        : esz == 2 ? ".word"
+                                        : esz == 4 ? ".long"
+                                                   : ".quad";
+
+                fprintf(cg->out, "    .align  8\n");
+                fprintf(cg->out, "globobj_%zu:\n", label_id);
+
+                for (size_t j = 0; j < init->as.array_lit.count; j++) {
+                    const Expr *el = init->as.array_lit.elements[j];
+                    // A mesma coerção do escalar: o literal pode estar embaixo de um ExprCast.
+                    while (el && el->kind == ExprCast)
+                        el = el->as.cast.operand;
+
+                    if (el->kind == ExprString) {
+                        size_t id =
+                            emit_string_object(cg, el->as.string_lit.text, el->as.string_lit.len);
+                        fprintf(cg->out, "    .data\n");
+                        fprintf(cg->out, "    .quad   strobj_%zu\n", id);
+                        continue;
+                    }
+                    long long v;
+                    switch (el->kind) {
+                        case ExprInteger: v = (long long)el->as.integer.value; break;
+                        case ExprBool:    v = el->as.boolean.value ? 1 : 0; break;
+                        case ExprChar:    v = (long long)(unsigned char)el->as.char_lit.value; break;
+                        default:
+                            tarm_error_at(cg->diag, el->line, el->col,
+                                          "elemento de array global precisa ser literal constante");
+                            return false;
+                    }
+                    fprintf(cg->out, "    %-7s %lld\n", directive, v);
+                }
+
+                // Literal menor que o tamanho declarado: completa com zeros, para o rótulo
+                // seguinte não invadir o fim do array.
+                if ((size_t)t->array_len > init->as.array_lit.count)
+                    fprintf(cg->out, "    .zero   %zu\n",
+                            esz * ((size_t)t->array_len - init->as.array_lit.count));
+
+                continue;
+            }
+
+            long long initial = 0;
+
             switch (init->kind) {
                 case ExprInteger: initial = (long long)init->as.integer.value; break;
                 case ExprBool:    initial = init->as.boolean.value ? 1 : 0; break;
@@ -805,11 +898,18 @@ bool tarm_codegen_generate(Codegen *cg, Expr **program, size_t count) {
                                   "inicializador de global não suportado");
                     return false;
             }
-        }
 
-        fprintf(cg->out, "    .align  8\n");
-        fprintf(cg->out, "globobj_%zu:\n", label_id);
-        fprintf(cg->out, "    .quad   %lld\n", initial);
+            fprintf(cg->out, "    .align  8\n");
+            fprintf(cg->out, "globobj_%zu:\n", label_id);
+            fprintf(cg->out, "    .quad   %lld\n", initial);
+        } else {
+            if (t->is_array) {
+                fprintf(cg->out, "    .align  8\n");
+                fprintf(cg->out, "globobj_%zu:\n", label_id);
+                fprintf(cg->out, "    .zero   %zu\n", esz * (size_t)t->array_len);
+                continue;
+            }
+        }
     }
 
     // --- segunda passagem: código ------------------------------------------------------------
