@@ -198,16 +198,8 @@ static bool parse_arg_list(Parser *ps, ExprList *args) {
 // Todo item de nível superior começa por um tipo — o de retorno, se for função; o da variável, se
 // for global. Qual das duas é, quem decide é `parse_scope_declaration`.
 static Expr *parse_top_level(Parser *ps) {
-    if (match_type_kw(ps)) {
-        return parse_scope_declaration(ps);
-    }
 
-    Token t = peek(ps);
-    tarm_error_at(ps->diag, t.line, t.col,
-                  "instrução de nível superior deve começar com um tipo "
-                  "(declaração de função ou variável global); recebeu '%.*s'",
-                  (int)t.len, t.start);
-    return NULL;
+    return parse_scope_declaration(ps);
 }
 
 // Declaração de nível superior: função ou variável global. O tipo já foi consumido por
@@ -223,9 +215,17 @@ static Expr *parse_top_level(Parser *ps) {
 //
 // Ver docs/parser.md#nível-superior.
 static Expr *parse_scope_declaration(Parser *ps) {
-    Token    type_tok = previous(ps);
-    DataType ret_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
+    Token    type_tok = peek(ps);
+    DataType type     = tarm_datatype_of(datatype_from_token(type_tok.kind));
 
+    if (!parse_type(ps, &type)) {
+        Token t = peek(ps);
+        tarm_error_at(ps->diag, t.line, t.col,
+                      "instrução de nível superior deve começar com um tipo "
+                      "(declaração de função ou variável global); recebeu '%.*s'",
+                      (int)t.len, t.start);
+        return NULL;
+    }
     Expr *identifier_expr = parse_identifier_expr(ps);
     if (!identifier_expr) return NULL;
 
@@ -256,17 +256,15 @@ static Expr *parse_scope_declaration(Parser *ps) {
         }
 
         e->as.func_decl.obj      = identifier_expr;
-        e->as.func_decl.ret_type = ret_type;
+        e->as.func_decl.ret_type = type;
         e->as.func_decl.params = ast_list_commit(ps->arena, &params, &e->as.func_decl.param_count);
 
         if (!parse_body_block(ps, &e->as.func_decl.body, &e->as.func_decl.body_count)) return NULL;
         return e;
     } else {
-        DataType var_type = tarm_datatype_of(datatype_from_token(type_tok.kind));
-
         Expr *init = NULL;
         if (match(ps, Equal)) {
-            init = parse_statement(ps);
+            init = check(ps, LBrace) ? parse_array_literal(ps) : parse_expression(ps);
             if (!init) return NULL;
         }
 
@@ -274,7 +272,7 @@ static Expr *parse_scope_declaration(Parser *ps) {
         if (!e) return NULL;
 
         e->as.var_decl.obj         = identifier_expr;
-        e->as.var_decl.type        = var_type;
+        e->as.var_decl.type        = type;
         e->as.var_decl.initializer = init;
         e->as.var_decl.frame       = Global;
         return e;

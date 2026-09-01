@@ -49,7 +49,8 @@ void tarm_lexer_init(Lexer *lx, const char *source, size_t len, Diagnostics *dia
 /// @note Literais de string e de caractere guardam apenas o **conteúdo**, sem as aspas. As
 /// sequências de escape são **validadas** mas não decodificadas: `\n` chega como dois caracteres,
 /// e a conversão fica para quem materializar o valor — o Parser, num literal de caractere, e a
-/// Codegen, num de string, que repassa a fatia ao `as`. É o que mantém o Lexer sem alocação nenhuma.
+/// Codegen, num de string, que repassa a fatia ao `as`. É o que mantém o Lexer sem alocação
+/// nenhuma.
 bool tarm_lexer_tokenize(Lexer *lx, TokenList *tokens);
 
 /// @brief Libera o vetor de tokens e devolve a lista ao estado vazio.

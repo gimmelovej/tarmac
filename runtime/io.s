@@ -1,6 +1,7 @@
 # ================================================================================================
 # File: io.s — Funções de I/O da runtime tarm. Convenção: System V AMD64 ABI.
-# Inteiro: %rdi = valor | Float: %xmm0 = valor | String: %rdi = ponteiro, %rsi = tamanho | Bool: %rdi = 0/1
+# Inteiro: %rdi = valor | Float: %xmm0 = valor | String: %rdi = ponteiro para o header do objeto |
+# Bool: %rdi = 0/1 | Char: %dil
 # Reference: docs/runtime.md
 # ================================================================================================
 .include "object.inc"
@@ -65,6 +66,7 @@ tarm_read_buf:
 # ------------------------------------------------------------------------------------------------
 # tarm_open_file (local) — Abre um arquivo via open(2) (syscall #2) com flags O_RDWR e devolve o
 # descritor. O nome do arquivo já vem em %rdi do chamador (tarm_read_buf), que não é alterado aqui.
+# Reference: docs/runtime.md#tabela-de-syscalls-linux-x86-64-usadas
 #
 # In:       %rdi = ponteiro para o nome do arquivo (String terminada em NUL)
 # Out:      %rax = descritor de arquivo (ou negativo em erro, repassado sem tratamento)
@@ -86,6 +88,7 @@ tarm_open_file:
 
 # ------------------------------------------------------------------------------------------------
 # _format_int (local) — Formata um int64 COM SINAL em ASCII base 10, do fim do buffer para o início.
+# Reference: docs/runtime.md#convencoes-especificas-de-io
 #
 # Guarda o sinal em %r8, formata o valor absoluto com _format_uint e, se era negativo, recua um byte
 # e escreve o '-' na frente dos dígitos. Escrever da direita para a esquerda é o que torna isso
@@ -119,6 +122,7 @@ _format_int:
 
 # ------------------------------------------------------------------------------------------------
 # _format_uint (local) — Formata um uint64 em ASCII base 10, do fim do buffer para o início.
+# Reference: docs/runtime.md#convencoes-especificas-de-io
 #
 # In:       %rax = valor sem sinal, %rdi = fim (exclusivo) do buffer
 # Out:      %rsi = ponteiro pro primeiro dígito, %rcx = quantidade de dígitos
@@ -144,6 +148,7 @@ _format_uint:
 # ------------------------------------------------------------------------------------------------
 # _format_uint_padded4 (local) — Igual a _format_uint, mas sempre 4 dígitos (zero à esquerda).
 # Usada por print_float para a parte fracionária (já escalada por 10000).
+# Reference: docs/runtime.md#convencoes-especificas-de-io
 #
 # In:       %rax = valor (0..9999), %rdi = fim (exclusivo) do buffer
 # Out:      %rsi = ponteiro pro início dos 4 dígitos, %rcx = 4 (fixo)
@@ -166,10 +171,11 @@ _format_uint_padded4:
     ret
 
 # ------------------------------------------------------------------------------------------------
-# tarm_print_int — Imprime um inteiro não-negativo (write, #1). Não insere '\n'.
+# tarm_print_int — Imprime um inteiro com sinal (write, #1); o '-' vem de _format_int. Não insere
+# '\n'.
 # Reference: docs/runtime.md#convencoes-especificas-de-io
 #
-# In:       %rdi = valor (Int/Int64, não-negativo)
+# In:       %rdi = valor (Int/Int64, com sinal; toda a faixa, INT64_MIN inclusive)
 # Out:      nenhum (void); side-effect em stdout
 # Clobbers: %rax, %rdi, %rsi, %rdx, %rcx
 # ------------------------------------------------------------------------------------------------
@@ -247,7 +253,9 @@ tarm_print_float:
 # ------------------------------------------------------------------------------------------------
 # tarm_print_str — Imprime uma String (write, #1); lê o ponteiro e o tamanho do header do objeto
 # (OBJ_DATA/OBJ_LEN — ver object.s), não depende de terminador nulo. Não insere '\n'.
-# Reference: docs/runtime.md#convencoes-especificas-de-io
+# Ponteiro **nulo** desvia para fatal_error_: um elemento de string nunca atribuído (arrays nascem
+# zerados) aborta o programa em vez de ler o endereço 0.
+# Reference: docs/runtime.md#aborto-de-execucao
 #
 # In:       %rdi = ponteiro para o header do objeto (String)
 # Out:      nenhum (void); side-effect em stdout
@@ -257,6 +265,9 @@ tarm_print_str:
     pushq   %rbp
     movq    %rsp, %rbp
     pushq   %rbx
+    
+    testq %rdi, %rdi
+    je fatal_error_
 
     movq    OBJ_LEN(%rdi), %rdx    # arg3 do syscall: tamanho
     movq    OBJ_DATA(%rdi), %rsi   # arg2 do syscall: ponteiro do texto
@@ -307,7 +318,8 @@ tarm_print_bool:
 
 
 # ------------------------------------------------------------------------------------------------
-# tarm_print_char — Imprime um único caractere (write, #1), via slot temporário na stack. Não insere '\n'.
+# tarm_print_char — Imprime um único caractere (write, #1), via slot temporário na stack. Não
+# insere '\n'.
 # Reference: docs/runtime.md#convencoes-especificas-de-io
 #
 # In:       %dil = caractere (Char, byte baixo de %rdi)

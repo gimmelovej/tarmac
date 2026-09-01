@@ -110,14 +110,20 @@ O tratamento é **genérico de propósito**, nesta primeira versão: uma mensage
 falhou nem onde. O que se ganha já é o essencial — o programa para em vez de continuar sobre memória
 inválida. Uma versão com causa e posição virá depois.
 
-Hoje o único desvio para lá é a **verificação de faixa de array** emitida pela geração de código,
-quando o índice é uma variável:
+Hoje dois caminhos desviam para lá:
 
-```
-cmpq    $3, %rax          # 3 = array_len
-jge     fatal_error_
-movslq  -48(%rbp, %rax, 4), %rax
-```
+- a **verificação de faixa de array** emitida pela geração de código, quando o índice é calculado
+  (uma variável ou uma expressão), na leitura e na escrita:
+
+  ```
+  cmpq    $3, %rax          # 3 = array_len
+  jae     fatal_error_      # sem sinal: um índice negativo também cai aqui
+  movslq  -48(%rbp, %rax, 4), %rax
+  ```
+
+- o **ponteiro de String nulo** em `tarm_print_str`: todo array nasce zerado, e o zero de uma
+  `string` é um ponteiro nulo — imprimir um elemento nunca atribuído aborta em vez de ler o
+  endereço 0.
 
 Com índice **literal**, a faixa continua sendo conferida em tempo de compilação, e nenhum código de
 verificação é emitido — o custo em tempo de execução só existe onde o valor não pode ser conhecido
@@ -135,7 +141,8 @@ espaço de nomes das funções do usuário, que a Codegen prefixa com `tarm_`.
 - **Nenhuma rotina de `print` insere `\n` automaticamente.** Quebra de linha é responsabilidade do
   programa, como em C.
 - **`tarm_print_str` lê do header** (`OBJ_DATA`/`OBJ_LEN`), então imprime exatamente os bytes do
-  objeto — sem depender de terminador nulo e sem varrer a string para achar o tamanho.
+  objeto — sem depender de terminador nulo e sem varrer a string para achar o tamanho. Um ponteiro
+  **nulo** desvia para `fatal_error_` (ver [Aborto de execução](#aborto-de-execucao)).
 - **`tarm_print_int` imprime com sinal.** Quem trata isso é `_format_int`: guarda o sinal, formata o
   módulo com `_format_uint` e, se era negativo, recua um byte e escreve o `'-'` na frente. Escrever
   da direita para a esquerda é o que torna isso barato — o sinal entra por último, sem deslocar

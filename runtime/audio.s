@@ -1,6 +1,6 @@
 # ================================================================================================
 # File: audio.s — Funções de áudio da runtime tarm. Convenção: System V AMD64 ABI.
-# Inteiro: %rdi = valor | Float: %xmm0 = valor | String: %rdi = ponteiro, %rsi = tamanho | Bool: %rdi = 0/1
+# Inteiros nos registradores da ABI: %rdi, %rsi, %rdx (ver tarm_emit_note).
 # Reference: docs/runtime.md
 # ================================================================================================
 

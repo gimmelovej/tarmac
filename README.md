@@ -34,11 +34,13 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > no nó, e `-x` vira `0 - x`), e a runtime passou a imprimir negativo — `print(0 - 5)` sai `-5`, e
 > não mais o complemento de dois em decimal.
 >
-> 🚧 **Arrays (novo, em desenvolvimento).** Declarar, inicializar, ler e atribuir já funcionam, com
-> índice literal, variável ou calculado (`v[i + 1]`). A **faixa é conferida sempre**: na compilação
-> quando o índice é literal, e em tempo de execução nos demais casos — na leitura e na escrita —,
-> abortando o programa em vez de ler ou corromper memória vizinha. O que falta para fechar o recurso
-> está em [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md).
+> 🚧 **Arrays (novo, em desenvolvimento).** Declarar, inicializar, ler e atribuir já funcionam —
+> agora também como **variável global**, com os elementos em `.data` — com índice literal, variável
+> ou calculado (`v[i + 1]`). **Todo array nasce zerado**: `int[3] v = {1}` vira `{1, 0, 0}` e
+> `int[3] v;` vale `{0, 0, 0}`. A **faixa é conferida sempre**: na compilação quando o índice é
+> literal, e em tempo de execução nos demais casos — na leitura e na escrita —, abortando o
+> programa em vez de ler ou corromper memória vizinha. O que falta para fechar o recurso está em
+> [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md).
 
 ---
 
@@ -50,10 +52,15 @@ tarmac/
 ├── src/            # Implementação (.c) de todo o compilador
 ├── runtime/        # Rotinas de suporte em assembly (.s), montadas e linkadas ao programa
 ├── docs/           # Documentação de referência conceitual (arquitetura, parser, runtime)
+├── .github/        # Workflow do CI (Debug + Release, smoke test e example.tm)
 ├── .vscode/        # Configuração compartilhada do editor (ver a nota abaixo)
 ├── .clang-format   # Estilo oficial de formatação, aplicado pelo formatOnSave e pelo Ctrl+Shift+I
 ├── CMakeLists.txt  # Build do executável `tarm`
+├── example.tm      # Passeio pelos recursos da linguagem; o CI o compila e executa
+├── CHANGELOG.md    # O que mudou a cada versão (o antes e o depois)
+├── CONTRIBUTING.md # Fluxo de branches, verificação local e padrão de documentação
 ├── TODO.md         # Próximas correções e novidades, em ordem de prioridade
+├── LICENSE         # MIT
 └── README.md       # Este arquivo
 ```
 
@@ -135,9 +142,12 @@ while i < 3 {
 }
 ```
 
-O que **já funciona**: declarar com tamanho fixo, inicializar com `{ ... }`, ler e atribuir um
-elemento por índice literal, variável ou calculado, a checagem do tipo de cada elemento, e a **faixa
-conferida sempre** — na compilação com índice literal, em tempo de execução nos demais casos.
+O que **já funciona**: declarar com tamanho fixo — **local ou global** —, inicializar com
+`{ ... }`, ler e atribuir um elemento por índice literal, variável ou calculado, a checagem do tipo
+de cada elemento, e a **faixa conferida sempre** — na compilação com índice literal, em tempo de
+execução nos demais casos. **Todo array nasce zerado**: sem inicializador, ou com menos elementos
+que o declarado, o restante vale zero; como o zero de uma `string` é um ponteiro nulo, imprimir um
+elemento nunca atribuído aborta o programa em vez de ler o endereço 0.
 Cada elemento é acessado na largura do seu tipo, então `int[3]` (12 bytes) e `char[4]` (4 bytes)
 convivem sem se sobrepor; com índice variável o endereço sai do modo escalado do x86, sem instrução
 de multiplicação.
@@ -146,8 +156,8 @@ O que **ainda não**, e vale saber antes de usar:
 
 | Limitação | Efeito prático |
 |---|---|
-| Inicializador menor que o declarado | `int[3] v = {1}` é aceito, e o resto fica com o que houvesse na stack |
-| Sem array como parâmetro, retorno ou global | não reconhecido |
+| Sem array como parâmetro ou retorno de função | não reconhecido |
+| `len()` só existe para `string` | o tamanho de um array não é consultável pelo programa |
 
 A faixa é conferida nos dois momentos: com índice **literal**, na análise semântica, sem emitir
 código nenhum; com índice **calculado**, por uma comparação antes do acesso — na leitura e na
@@ -234,8 +244,9 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Tipos | Tamanho de elemento com fonte única | 🟢 Implementado | `tarm_symbol_table_data_size` é a única tabela; o Parser a alcança por `tarm_datatype_of` |
 | Array | Verificação de faixa em tempo de execução | 🟢 Implementado | na leitura **e** na escrita: `cmpq`/`jae` antes do acesso, com desvio para `fatal_error_`. Sendo comparação sem sinal, a mesma instrução cobre o índice negativo |
 | Array | Índice como expressão (`v[i + 1]`) | 🟢 Implementado | qualquer expressão que resolva para `int` serve; o valor é avaliado para um registrador e entra no modo escalado |
-| Array | Inicializador menor que o declarado | 🟡 Aceito em silêncio | `int[3] v = {1}` deixa o resto com o que houvesse na stack |
-| Array | Como parâmetro, retorno ou variável global | ⚪ Não iniciado | — |
+| Array | Inicialização zerada (sem inicializador, ou literal menor que o declarado) | 🟢 Implementado | `int[3] v = {1}` vira `{1, 0, 0}` e `int[3] v;` vira `{0, 0, 0}` — `movq` por slot no frame, `.zero` em `.data` |
+| Array | Variável global | 🟢 Implementado | elementos em `.data` na largura do tipo (`.byte`/`.word`/`.long`/`.quad`); elemento `string` emite o objeto em `.rodata` e guarda o ponteiro; leitura e escrita por `globobj_N(%rip)` no modo escalado |
+| Array | Como parâmetro ou retorno de função | ⚪ Não iniciado | — |
 | AST | Nós da árvore: união etiquetada por `ExprKind`, com o tipo resolvido em `type` e a posição de origem em cada nó | 🟢 Implementado | nomes e textos são fatias do buffer, como nos tokens; ver [`docs/architecture.md`](docs/architecture.md#a-ast-como-união-etiquetada) |
 | Tipos | `BaseType` (categoria) separado de `DataType` (categoria + forma de array) | 🟢 Implementado | evita duplicar cada tipo numa versão "array de"; quem só precisa da categoria lê `type` |
 | AST | `ExprList` → arena (`ast_list_push`/`ast_list_commit`) | 🟢 Implementado | vetor temporário no heap, copiado para a arena quando o tamanho final é conhecido |
@@ -245,7 +256,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Semântica | Tipos, coerção implícita, faixa de `char`, condição de `if`/`while`, tipo do `return` | 🟢 Implementado | erro não interrompe a análise: acumula e segue |
 | Semântica | Escopo por função | 🟢 Implementado | marca de pilha na `SymbolTable`: locais somem ao sair da função, globais permanecem |
 | Semântica | Validação de chamadas | 🟢 Implementado | existência, aridade e o tipo de cada posição, com coerção implícita; passagem prévia registra as assinaturas, então uma função pode chamar outra definida depois |
-| Semântica | Inicializador de global | 🟢 Implementado | precisa ser literal constante — vira `.quad` em `.data`, e não há onde executar código antes do programa |
+| Semântica | Inicializador de global | 🟢 Implementado | precisa ser literal constante (escalar ou `{ ... }` de literais) — vira dado em `.data`, e não há onde executar código antes do programa |
 | Codegen | Expressões, `if`/`else`, `while`, `return`, prólogo/epílogo por função, parâmetros nos registradores da ABI | 🟢 Implementado | alinhamento de `%rsp` conferido antes de cada `call` |
 | Codegen | Chamadas: nativas pelo rótulo da `FunctionTable`, do usuário com *mangling* `tarm_<nome>` | 🟢 Implementado | `main` é a exceção do *mangling* — é o nome que o `_start` chama |
 | Codegen | `print` despachado por tipo | 🟢 Implementado | escolhe `tarm_print_int`/`_str`/`_bool`/`_char` pelo `type` já anotado no argumento |
@@ -256,6 +267,7 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Runtime | Impressão de `int64` em toda a faixa | 🟢 Implementado | `_format_uint` divide em 64 bits; antes truncava a partir de 2³² |
 | Runtime | Impressão de número negativo | 🟢 Implementado | `_format_int` guarda o sinal, formata o módulo com `_format_uint` e escreve o `-` na frente; `INT64_MIN` inclusive |
 | Runtime | Aborto de execução (`fatal_error_`, `runtime/error.s`) | 🟡 Genérico | mensagem única em *stderr* e `exit(1)`, sem causa nem posição; ver [`docs/runtime.md`](docs/runtime.md#aborto-de-execucao) |
+| Runtime | `print` de `string` nula abortado | 🟢 Implementado | `tarm_print_str` testa o ponteiro e desvia para `fatal_error_` — cobre o elemento `string` nunca atribuído de um array zerado |
 | Runtime | `read_buf` e o tipo `buffer` | ⚪ Fora deste port | a rotina continua em `runtime/io.s`, sem quem a chame |
 | Driver | Pipeline completo, com barreira de diagnóstico entre etapas | 🟢 Implementado | todos os recursos são declarados antes do primeiro `goto`, então a limpeza nunca vê variável indeterminada |
 | Driver | Montagem e link com `as` + `ld`, sem `gcc` e sem shell | 🟢 Implementado | `posix_spawnp` + `waitpid` com código de saída conferido; `.o` temporários removidos mesmo em caso de falha |

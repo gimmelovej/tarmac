@@ -24,9 +24,9 @@ tarm_mmap_alloc:
     # Organiza os 6 argumentos esperados pela System Call de mmap.
     movq    %rdi, %rsi  # Argumento 2 (Lenght): Tamanho do bloco de memória a ser alocado.
     xorq    %rdi, %rdi  # Argumento 1 (Addr): Endereço à ser usado.
-    movq    $3, %rdx    # Argumento 3 (Permissão de memória): PROT_READ (1) | PROT_WRITE (2) = 3 (Permissão de leitura e escrita).
+    movq    $3, %rdx    # Argumento 3 (Prot): PROT_READ (1) | PROT_WRITE (2) = 3, leitura e escrita.
     movq    $34, %r10   # Argumento 4 (Flags): Opções de mapeamento.
-    movq    $-1, %r8    # Argumento 5 (Fd): File descriptor. Como usamos MAP_ANONYMOUS, não há arquivo envolvido, então passa-se -1.
+    movq    $-1, %r8    # Argumento 5 (Fd): com MAP_ANONYMOUS não há arquivo, então passa-se -1.
     xorq    %r9, %r9    # Argumento 6 (Offset): Deslocamento no arquivo. Como não há arquivo, é 0.
 
     # Chamando syscall
@@ -36,7 +36,7 @@ tarm_mmap_alloc:
     # Verifica resultado da execução
     cmpq    $-1, %rax   # Compara retorno em %rax com -1 (MAP_FAILED).
     jne     .mmap_done  # Com sucesso (não é igual a -1), pula para a finalização.
-    xorq    %rax, %rax  # Se falhar, padroniza o retorno de erro da função para ponteiro nulo (NULL), zerando o %rax.
+    xorq    %rax, %rax  # Se falhar, padroniza o retorno de erro como ponteiro nulo (NULL).
 
     .mmap_done:
         movq    %rbp, %rsp
@@ -82,7 +82,8 @@ tarm_brk_alloc:
         ret
 
 # ------------------------------------------------------------------------------------------------
-# tarm_brk_free (local) — Libera memória movendo o program break de volta para %rdi (syscall brk, #12).
+# tarm_brk_free (local) — Libera memória movendo o program break de volta para %rdi (syscall brk,
+# #12).
 # Reference: docs/runtime.md#heap-brk-linear
 # @warning Libera também tudo alocado acima de %rdi — heap linear, sem contabilidade de blocos.
 #
@@ -119,8 +120,9 @@ tarm_brk_free:
         popq    %rbp
         ret
 # ------------------------------------------------------------------------------------------------
-# tarm_mmap_free (local) — Libera mapeamento via munmap(2) (syscall #11). Argumentos já vêm prontos do
-# chamador (%rdi/%rsi); região independente (não afeta outros mapeamentos, ao contrário de brk_free).
+# tarm_mmap_free (local) — Libera mapeamento via munmap(2) (syscall #11). Argumentos já vêm prontos
+# do chamador (%rdi/%rsi); região independente (não afeta outros mapeamentos, ao contrário de
+# brk_free).
 # Reference: docs/runtime.md#tabela-de-syscalls-linux-x86-64-usadas
 #
 # In:       %rdi = ponteiro, %rsi = tamanho em bytes
@@ -137,7 +139,7 @@ tarm_mmap_free:
     # Verifica resultado da execução
     cmpq    $-1, %rax   # Compara retorno em %rax com -1.
     jne     .free_done  # Com sucesso (não é igual a -1), pula para a finalização.
-    xorq    %rax, %rax  # Se falhar, padroniza o retorno de erro da função para ponteiro nulo (NULL), zerando o %rax.
+    xorq    %rax, %rax  # Se falhar, padroniza o retorno de erro como ponteiro nulo (NULL).
 
     .free_done:
         movq    %rbp, %rsp
