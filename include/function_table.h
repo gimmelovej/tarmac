@@ -121,7 +121,8 @@ bool tarm_function_table_check_arity(const FunctionSignature *sig, size_t arg_co
 uint32_t tarm_function_table_accepted_mask(const FunctionSignature *sig, size_t index);
 
 /// @brief Rótulo do runtime a chamar, dado o tipo do argumento de despacho.
-/// @param dispatch_type Tipo do argumento em `sig->dispatch_param`; ignorado quando não há despacho.
+/// @param dispatch_type Tipo do argumento em `sig->dispatch_param`; ignorado quando não há
+/// despacho.
 /// @return O rótulo, ou `NULL` se a assinatura for de função do usuário (o rótulo sai do nome) ou
 /// se o tipo não tiver implementação no runtime.
 const char *tarm_function_table_symbol(const FunctionSignature *sig, BaseType dispatch_type);

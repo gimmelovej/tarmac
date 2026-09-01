@@ -44,9 +44,9 @@ Todo item de nível superior precisa começar por uma palavra-chave de tipo (`in
 global. Uma instrução solta sem esse prefixo (uma chamada direta, por exemplo) é rejeitada com erro
 de sintaxe, citando o que apareceu no lugar.
 
-O tipo é consumido por `match_type_kw` **antes** de se saber qual das duas construções vem, e
-`parse_scope_declaration` o recupera com `previous(ps)`. É também de lá que sai a posição
-(`line`/`col`) do nó, para que o erro aponte o começo da declaração e não o meio dela.
+O tipo — incluindo a forma de array (`int[3]`) — é lido por `parse_type` no começo de
+`parse_scope_declaration`, **antes** de se saber qual das duas construções vem. Se ali não houver
+uma palavra-chave de tipo, o erro é registrado apontando o começo da declaração, e não o meio dela.
 
 Logo depois do tipo vem o nome, lido por `parse_identifier_expr` — e é só então, olhando o
 **caractere seguinte**, que se sabe o que está sendo declarado: `(` abre uma lista de parâmetros e o
@@ -55,6 +55,7 @@ nó vira `ExprFuncDecl`; qualquer outra coisa faz dele um `ExprVarDecl` de frame
 ```tarmac
 int main() { ... }            // declaração de função
 int contador = 0;             // variável global
+int[3] tabela = { 1, 2, 3 };  // variável global de array, elementos em .data
 print("oi");                  // ERRO: não começa com um tipo
 ```
 
@@ -255,8 +256,9 @@ A decodificação acontece em quem materializa o valor, e por isso em dois lugar
 ## Arrays (novo e em desenvolvimento)
 
 > 🚧 **Recurso novo.** Chegou na `0.2.0-alpha` e continua evoluindo. Declarar, inicializar, ler e
-> atribuir já funcionam, com índice literal **ou variável**; o que ainda falta está no fim desta
-> seção e no [`TODO.md`](../TODO.md).
+> atribuir já funcionam, com índice literal **ou variável**, em variável local **ou global** —
+> e todo array nasce zerado. O que ainda falta está no fim desta seção e no
+> [`TODO.md`](../TODO.md).
 
 O tamanho vem **antes** do nome, colado ao tipo — `int[3] v`, e não `int v[3]` como em C:
 
@@ -273,7 +275,8 @@ while i < 3 {
 ```
 
 Ler a forma de uma vez só é o motivo da escolha. `parse_type` consome a palavra-chave e o `[N]`
-juntos, então quando `parse_declaration` chega ao identificador já sabe tudo sobre o valor: a
+juntos, então a declaração — local ou global — chega ao identificador já sabendo tudo sobre o
+valor: a
 categoria, o tamanho de um elemento e quantos elementos há. O tipo resultante é um `DataType`
 (`types.h`) cujo `type` continua sendo o do **elemento** — `int[3]` guarda `Int`, e o que o
 distingue de um `int` é o `is_array`.
@@ -317,12 +320,25 @@ que uma operação binária usa para não perder o lado esquerdo.
 O índice precisa ser do tipo `int`: um `int64` é recusado pela análise semântica, porque não há
 conversão implícita que estreite.
 
+### Todo array nasce zerado
+
+Sem inicializador, ou com um literal menor que o declarado, o restante vale **zero** — a mesma
+regra dos escalares, que já nasciam zerados. A mecânica é da Codegen, uma por classe de
+armazenamento: no frame, os slots do array são zerados (`movq $0`) antes de o inicializador gravar
+por cima; em `.data`, o literal vira diretivas na largura do elemento (`.byte`/`.word`/`.long`/
+`.quad`) e o complemento sai num `.zero`. O Parser não participa — inflar o `ExprArrayLit` com
+literais sintéticos custaria nós e instruções proporcionais ao tamanho declarado e faria a análise
+semântica conferir zeros que o usuário não escreveu.
+
+O zero de uma `string` é um ponteiro **nulo**: imprimir um elemento nunca atribuído desvia para
+`fatal_error_` (ver [`docs/runtime.md`](runtime.md#aborto-de-execucao)) em vez de ler o endereço 0.
+
 ### O que ainda não funciona
 
 | Limitação | Efeito |
 |---|---|
-| **Menos elementos que o declarado** | `int[3] v = {1}` é aceito, e os dois últimos ficam com o que houvesse na stack |
-| **Array como parâmetro, retorno ou global** | não reconhecido |
+| **Array como parâmetro ou retorno de função** | não reconhecido |
+| **`len()` sobre array** | só existe para `string` |
 
 ### Faixa conferida nos dois momentos
 

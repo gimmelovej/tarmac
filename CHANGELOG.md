@@ -9,6 +9,49 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.6.0-alpha] - 2026-09-01
+
+**Array chega ao nível superior** — uma variável global pode ser um array, com os elementos virando
+dados em `.data` — e junto entra uma regra nova da linguagem: **todo array nasce zerado**. Um
+inicializador menor que o declarado completa com zeros, e um array sem inicializador vale zero em
+todos os elementos, no frame ou em `.data`. Zero foi a escolha por três motivos: `.data` precisa
+conter algum byte de qualquer forma, os escalares da linguagem já nasciam zerados (a regra vira uma
+só), e é o que o armazenamento estático do C ensinou todo mundo a esperar.
+
+```tarmac
+int[3] medidas = { 10, 20, 30 };    // global: vira .long 10 / 20 / 30 em .data
+string[2] nomes = { "ana", "bia" }; // cada elemento aponta para um objeto em .rodata
+int[4] contadores;                  // nasce {0, 0, 0, 0}
+
+int main() {
+    int[3] parcial = { 1 };         // {1, 0, 0} — o complemento é zerado
+    return 0;
+}
+```
+
+### Adicionado
+- **Variável global de array.** O literal vira diretivas na largura do elemento
+  (`.byte`/`.word`/`.long`/`.quad`); um elemento `string` emite o objeto no `.rodata` e guarda o
+  **ponteiro** no array, como a global escalar de `string` já fazia. Leitura e escrita usam
+  `globobj_N(%rip)` como base do endereçamento escalado, com a mesma verificação de faixa em tempo
+  de execução dos arrays locais — antes, o acesso indexado a uma global usava o offset de stack e
+  lia (ou corrompia) o frame da função.
+- **Inicialização zerada de arrays.** No frame, os slots do array são zerados (`movq $0` por slot
+  de 8 bytes, a mesma conta de `count_slots`) antes de o inicializador gravar por cima — o que
+  também cobre o frame reutilizado dentro de um laço; em `.data`, o complemento sai num `.zero`.
+  A mecânica vive na Codegen, e não no Parser: inflar o literal com zeros sintéticos custaria nós
+  e instruções proporcionais ao tamanho declarado, e faria a análise semântica conferir elementos
+  que o usuário não escreveu.
+- **Aborto em `string` nula.** O zero de um elemento `string` é um ponteiro nulo, e imprimi-lo era
+  falha de segmentação: `tarm_print_str` passou a testar o ponteiro e desviar para `fatal_error_`,
+  o mesmo aborto da verificação de faixa — o programa para com a mensagem de erro de execução em
+  vez de cair.
+
+### Alterado
+- **`parse_scope_declaration` lê o tipo com `parse_type`**, então o cabeçalho de nível superior
+  aceita a forma de array (`int[3] v`) — antes o tipo vinha só da palavra-chave, sem o `[N]`. O
+  inicializador global aceita `{ ... }` pela mesma `parse_array_literal` das declarações locais.
+
 ## [0.5.0-alpha] - 2026-08-25
 
 A palavra-chave **`function` saiu da linguagem**. Uma função passa a se declarar como em C — tipo de
