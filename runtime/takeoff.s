@@ -12,6 +12,14 @@
 .text
 .global _start
 
+# ------------------------------------------------------------------------------------------------
+# _start — Ponto de entrada: monta argc/argv/envp, chama `main` e encerra (syscall exit, #60).
+# Reference: docs/runtime.md#como-a-runtime-é-montada-e-linkada
+#
+# In:       pilha inicial do kernel: (%rsp) = argc, 8(%rsp) = argv, argv[argc + 1] = envp
+# Out:      não retorna; o código de saída do processo é o valor devolvido por `main` (%eax)
+# Clobbers: irrelevante — nunca há um chamador para o qual voltar
+# ------------------------------------------------------------------------------------------------
 _start:
     xorq    %rbp, %rbp              # ABI: marca o fim da cadeia de frames
     movq    (%rsp), %rdi            # argc

@@ -13,15 +13,14 @@ Convenção das marcas: 🔴 corrige um comportamento errado · 🟡 completa al
 ## Patch — arrays (`0.2.x`)
 
 O suporte a array entrou na `0.2.0-alpha` e vem fechando desde então: largura de acesso por
-elemento, espaço correto no frame, faixa conferida, atribuição a elemento e índice variável em
-leitura e escrita. O que resta, na ordem em que faz sentido atacar:
+elemento, espaço correto no frame, faixa conferida, atribuição a elemento, índice variável em
+leitura e escrita e, na `0.6.0-alpha`, variável global e a regra "todo array nasce zerado". O que
+resta, na ordem em que faz sentido atacar:
 
 | # | Marca | Item | Onde |
 |---|---|---|---|
-| 1 | 🟡 | **Inicializador menor que o declarado** é aceito em silêncio: `int[3] v = {1}` deixa os dois últimos elementos com o que houvesse na stack. Zerar o resto, ou recusar. | `semantic.c`, `codegen.c` |
-| 2 | 🟡 | **Array global**, em `.data`, com o literal virando uma sequência de `.quad`. | `codegen.c` |
-| 3 | 🟢 | **Array como parâmetro e retorno** de função — passa a exigir uma decisão sobre passagem por referência. | todas as etapas |
-| 4 | 🟢 | **`len()` sobre array**, hoje só disponível para `string`. | `function_table.c` |
+| 1 | 🟢 | **Array como parâmetro e retorno** de função — passa a exigir uma decisão sobre passagem por referência. | todas as etapas |
+| 2 | 🟢 | **`len()` sobre array**, hoje só disponível para `string`. | `function_table.c` |
 
 ## Patch — geral
 

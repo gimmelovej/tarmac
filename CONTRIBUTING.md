@@ -2,10 +2,10 @@
 
 Obrigado pelo interesse! O Tarmac é um projeto pessoal/educacional, e este repositório — a
 releitura em C do [compilador original em C++](https://github.com/gimmelovej/tarmac-cpp) — está em
-**desenvolvimento**: as cinco etapas do pipeline existem e o Driver as encadeia até montar e linkar
-o binário, mas o executável ainda não sai correto. Veja a tabela [Estado do
-desenvolvimento](README.md#estado-do-desenvolvimento) antes de reportar algo, para checar se já é
-uma limitação conhecida.
+**desenvolvimento**: as cinco etapas do pipeline existem, o Driver as encadeia até montar e linkar
+o binário, e `example.tm` compila e roda — mas há recursos pela metade e outros ainda não
+iniciados. Veja a tabela [Estado do desenvolvimento](README.md#estado-do-desenvolvimento) antes de
+reportar algo, para checar se já é uma limitação conhecida.
 
 ## Fluxo de branches e Pull Requests
 
