@@ -41,6 +41,7 @@ typedef enum {
     KwFalse,
     KwString,
     KwIf,
+    KwElsif,
     KwElse,
     KwWhile,
     KwDeclaration,
