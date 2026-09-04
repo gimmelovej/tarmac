@@ -9,7 +9,7 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
-## [0.7.0-alpha] - 2026-09-01
+## [0.7.0-alpha] - 2026-09-04
 
 A cadeia condicional completa entra na linguagem: **`elsif`**. Quantos ramos forem precisos entre o
 `if` e o `else`, sem aninhar blocos à mão.
