@@ -111,21 +111,12 @@ static TokenKind check_keyword(const char *text, size_t len) {
         const char *word;
         TokenKind   kind;
     } kws[] = {
-        {"buffer", KwBuffer},
-        {"char", KwChar},
-        {"int", KwInt},
-        {"float", KwFloat},
-        {"bool", KwBool},
-        {"int64", KwInt64},
-        {"string", KwString},
-        {"if", KwIf},
-        {"while", KwWhile},
-        {"else", KwElse},
-        {"return", KwReturn},
         // `true`/`false` são palavras-chave, não identificadores: reconhecê-las aqui poupa o
         // Parser de comparar texto para descobrir que um identificador era um literal booleano.
-        {"true", KwTrue},
-        {"false", KwFalse},
+        {"buffer", KwBuffer}, {"char", KwChar},   {"int", KwInt},       {"float", KwFloat},
+        {"bool", KwBool},     {"int64", KwInt64}, {"string", KwString}, {"if", KwIf},
+        {"elsif", KwElsif},   {"while", KwWhile}, {"else", KwElse},     {"return", KwReturn},
+        {"true", KwTrue},     {"false", KwFalse},
     };
 
     for (size_t i = 0; i < sizeof kws / sizeof *kws; i++)
@@ -432,6 +423,7 @@ const char *tarm_token_kind_name(TokenKind kind) {
         case KwBool:         return "KwBool";
         case KwString:       return "KwString";
         case KwIf:           return "KwIf";
+        case KwElsif:        return "KwElsif";
         case KwElse:         return "KwElse";
         case KwWhile:        return "KwWhile";
         case KwDeclaration:  return "KwDeclaration";
