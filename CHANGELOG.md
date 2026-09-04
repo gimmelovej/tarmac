@@ -9,6 +9,28 @@ Este arquivo guarda o histórico de "o que mudou" (o antes e o depois). A docume
 (`README.md`, `docs/`) descreve apenas o **estado atual** — quando quiser saber quando/por que algo
 passou a funcionar de um jeito, é aqui que se olha.
 
+## [0.7.0-alpha] - 2026-09-01
+
+A cadeia condicional completa entra na linguagem: **`elsif`**. Quantos ramos forem precisos entre o
+`if` e o `else`, sem aninhar blocos à mão.
+
+```tarmac
+if n < 10 { print("baixo"); }
+elsif n < 100 { print("medio"); }
+elsif n < 1000 { print("alto"); }
+else { print("enorme"); }
+```
+
+### Adicionado
+- **`elsif`**, como açúcar do Parser: cada `elsif` vira um `ExprConditional` aninhado como único
+  item do `else_body` do anterior, e o `else` final se pendura na cauda da cadeia — a análise
+  semântica e a geração de código nem ficam sabendo que ele existe, e o programa compila idêntico
+  ao mesmo escrito com `else { if ... }`. Foi a forma de ganhar a cadeia inteira sem tocar nenhuma
+  etapa além do Parser. Um `elsif` sem `if` antes é **erro de sintaxe** (`token inesperado`),
+  porque a palavra-chave só é reconhecida na continuação de um `if`.
+- `KwElsif` no `TokenKind` (`include/types.h`), a entrada `"elsif"` na tabela de palavras-chave do
+  Lexer e o caso correspondente em `tarm_token_kind_name`.
+
 ## [0.6.0-alpha] - 2026-09-01
 
 **Array chega ao nível superior** — uma variável global pode ser um array, com os elementos virando
