@@ -41,6 +41,10 @@ enxerga o que elas de fato faziam. As decisões desse caminho estão em
 > literal, e em tempo de execução nos demais casos — na leitura e na escrita —, abortando o
 > programa em vez de ler ou corromper memória vizinha. O que falta para fechar o recurso está em
 > [Arrays](#arrays-novo-e-em-desenvolvimento) e no [`TODO.md`](TODO.md).
+>
+> 🔀 **`elsif`.** A cadeia condicional completa — `if`/`elsif`/.../`else` — entrou na linguagem,
+> como açúcar desfeito no Parser: cada `elsif` compila exatamente como um `if` aninhado no `else`
+> do anterior, e um `elsif` sem `if` é erro de sintaxe.
 
 ---
 
@@ -228,7 +232,8 @@ O executável não depende de libc: quem inicializa o processo é o `_start` de
 | Lexer | Comentário de linha (`//`) | 🟢 Implementado | `skipTrivia` atravessa comentário e espaço em branco no mesmo laço |
 | Lexer | Posição (linha/coluna) e recuperação de erro | 🟢 Implementado | linha e coluna saem do par congelado no início do lexema; lexema desconhecido vira `Invalid` e a varredura segue |
 | Lexer | Decodificação de escapes | 🟢 Implementado | o Lexer **valida** e guarda a fatia crua; quem decodifica é o Parser (caractere) e a Codegen, que repassa a string ao `as` — ver [`docs/parser.md`](docs/parser.md#literais-e-escapes) |
-| Parser | Gramática completa: nível superior, funções, globais, blocos, `if`/`else`, `while`, `return`, precedência de expressão, chamadas e métodos | 🟢 Implementado | ver [`docs/parser.md`](docs/parser.md) para a gramática produção a produção |
+| Parser | Gramática completa: nível superior, funções, globais, blocos, `if`/`elsif`/`else`, `while`, `return`, precedência de expressão, chamadas e métodos | 🟢 Implementado | ver [`docs/parser.md`](docs/parser.md) para a gramática produção a produção |
+| Parser | Cadeia `elsif` | 🟢 Implementado | açúcar: vira `ExprConditional` aninhado no `else_body` do anterior; `elsif` órfão é erro de sintaxe — ver [`docs/parser.md`](docs/parser.md#instruções-if-while-return) |
 | Parser | Declaração de nível superior sem a palavra-chave `function` | 🟢 Implementado | função e global compartilham a produção `parse_scope_declaration`; é o `(` depois do nome que as separa — ver [`docs/parser.md`](docs/parser.md#nível-superior) |
 | Parser | Ponto e vírgula dentro de um bloco | 🟡 Frouxo | exigido no nível superior (`expect`), apenas consumido dentro de um bloco (`match`) — `int x = 1 int y = 2` passa |
 | Parser | Recuperação de erro (sincronização) | ⚪ Não iniciado | a primeira produção que falha encerra a análise: um erro de sintaxe por rodada |
