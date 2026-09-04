@@ -342,9 +342,8 @@ static Expr *parse_declaration(Parser *ps) {
 // para sozinha no `{`, porque nenhuma produção casa com `LBrace`. Quando eles aparecem, entram por
 // `parse_primary`, como agrupamento comum.
 static Expr *parse_statement(Parser *ps) {
-    Token t = peek(ps);
-
-    if (match(ps, KwIf)) {
+    if (check(ps, KwIf)) {
+        Token t    = advance(ps);
         Expr *cond = parse_expression(ps);
         if (!cond) return NULL;
 
@@ -357,14 +356,46 @@ static Expr *parse_statement(Parser *ps) {
         if (!parse_body_block(ps, &e->as.conditional.then_body, &e->as.conditional.then_count))
             return NULL;
 
+        // `elsif` é açúcar: cada um vira um `ExprConditional` aninhado como único item do
+        // `else_body` do anterior (`else_count = 1`), então semântica e Codegen veem a cadeia
+        // como `else { if ... }`. O `cur` desce até a cauda, e é nela que o `else` final se
+        // pendura. Ver docs/parser.md#instruções-if-while-return.
+        Expr *cur = e;
+
+        while (check(ps, KwElsif)) {
+            Token et = advance(ps);
+
+            Expr *ec = parse_expression(ps);
+            if (!ec) return NULL;
+
+            Expr *n = ast_expr_new(ps->arena, ExprConditional, et.line, et.col);
+            if (!n) return NULL;
+            n->as.conditional.cond       = ec;
+            n->as.conditional.else_body  = NULL;
+            n->as.conditional.else_count = 0;
+
+            if (!parse_body_block(ps, &n->as.conditional.then_body, &n->as.conditional.then_count))
+                return NULL;
+
+            Expr **one = arena_alloc(ps->arena, sizeof(Expr *));
+            if (!one) return NULL;
+            one[0]                         = n;
+            cur->as.conditional.else_body  = one;
+            cur->as.conditional.else_count = 1;
+
+            cur = n;
+        };
+
         if (match(ps, KwElse)) {
-            if (!parse_body_block(ps, &e->as.conditional.else_body, &e->as.conditional.else_count))
+            if (!parse_body_block(ps, &cur->as.conditional.else_body,
+                                  &cur->as.conditional.else_count))
                 return NULL;
         }
         return e;
     }
 
-    if (match(ps, KwWhile)) {
+    if (check(ps, KwWhile)) {
+        Token t    = advance(ps);
         Expr *cond = parse_expression(ps);
         if (!cond) return NULL;
 
@@ -377,7 +408,8 @@ static Expr *parse_statement(Parser *ps) {
         return e;
     }
 
-    if (match(ps, KwReturn)) {
+    if (check(ps, KwReturn)) {
+        Token t     = advance(ps);
         Expr *value = NULL;
         if (!check(ps, Semicolon)) {
             value = parse_expression(ps);

@@ -104,7 +104,9 @@ pela sintaxe, ainda que não tenha significado.
 ## Instruções (`if`, `while`, `return`)
 
 ```tarmac
-if x > 5 { ... } else { ... }     // parênteses opcionais
+if x > 5 { ... }
+elsif x > 0 { ... }               // quantos forem precisos
+else { ... }                      // parênteses da condição são opcionais
 while contador < 5 { ... }
 return x + 1;                      // ou `return;`
 ```
@@ -115,6 +117,11 @@ aparecem, entram por `parse_primary`, como um agrupamento comum.
 
 - **`if`** — o ramo `else` é opcional; quando não existe, o nó fica com `else_body = NULL` e
   `else_count = 0`, escritos explicitamente (a arena não zera o que entrega).
+- **`elsif`** — açúcar: cada `elsif` vira um `ExprConditional` aninhado como único item do
+  `else_body` do anterior (`else_count = 1`), e o `else` final se pendura na **cauda** da cadeia.
+  Análise semântica e geração de código nem sabem que ele existe — o programa compila idêntico ao
+  mesmo escrito com `else { if ... }`. Um `elsif` sem `if` antes é erro de sintaxe (`token
+  inesperado`): a palavra-chave só é reconhecida na continuação de um `if`.
 - **`while`** — mesma forma, sem ramo alternativo.
 - **`return`** — o valor é opcional: um `;` logo depois da palavra-chave produz `ret.value = NULL`.
 
